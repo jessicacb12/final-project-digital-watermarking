@@ -1,7 +1,7 @@
 $.ajax({
     success: function () {
         loadAllInputOutput();
-        
+
         //hide mode I/O when it's not selected
         $("#mode").change(function (e) {
             $(`.${e.target.options[
@@ -11,7 +11,7 @@ $.ajax({
                 1 - parseInt(e.target.selectedIndex)
             ].value.toLowerCase()}`).hide();
         });
-        
+
         // select embed at first
         $('#mode').val('Embed').change();
 
@@ -31,6 +31,18 @@ $.ajax({
                 }
             });
         });
+
+        // click process will start embedding
+        $("a.process").click(function (e) {
+            $.ajax({
+                type: 'POST',
+                url: 'embed',
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                }
+            });
+        })
     }
 });
 
@@ -133,8 +145,7 @@ function getCardFor(type, ioType, cardText) {
                     document
                         .createElement('a'),
                     [
-                        { name: 'href', value: '#' },
-                        { name: 'class', value: `${type} btn btn-primary` }
+                        { name: 'class', value: `${type} process btn btn-primary` }
                     ]
                 ),
                 'Process'

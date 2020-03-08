@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from watermarking import attacks
+from watermarking import embedding
 
 class Process:
     ROOT = "static/"
@@ -38,7 +39,7 @@ class Process:
         print('tes')
     
     def embed(self):
-        print('embed')
+        embedding.Embedding().embed(self.host, self.watermark)
         #everytime embedding is finished, clear host and watermark from system
 
     def extract(self):

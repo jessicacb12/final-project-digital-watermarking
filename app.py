@@ -28,6 +28,11 @@ def storeWatermark():
 def storeWatermarked():
     return process.getPreviewWMED(request.data)
 
+@app.route('/embed', methods=['POST'])
+def embedWatermarkToHost():
+    process.embed()
+    return render_template('index.html')
+
 @app.context_processor
 def override_url_for():
     return dict(url_for=dated_url_for)
