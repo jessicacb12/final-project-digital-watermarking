@@ -1,11 +1,26 @@
 $.ajax({
     success: function () {
-        loadInputOutput([
-            ['input', 'Host Image'],
-            ['input', 'Watermark'],
-            ['output', 'Watermarked']
-        ]);
+        changeInputOutput();
     }
+});
+
+$(document).ready(function () {
+    // send image to server side to get preview in return
+    $("input.host, input.wm, input.wmed").change(function (e) {
+        $.ajax({
+            type: 'POST',
+            url: `input/${e.target.className}`,
+            data: e.target.files[0],
+            processData: false,
+            contentType: false,
+            success: function (address) {
+                $(`img.${e.target.className}`)
+                    .attr('src', Flask.url_for("static", { "filename": address }))
+                    .width(300)
+                    .height(300)
+            }
+        });
+    });
 });
 
 // Can-be-used-by-all functions
@@ -28,21 +43,6 @@ function setTextToElement(element, text) {
 
 // UI files functions
 
-function displayInput(input) {
-    if (input.files && input.files[0]) {
-        let reader = new FileReader();
-
-        reader.onload = function (e) {
-            $(`img.${input.classList[0]}`)
-                .attr('src', e.target.result)
-                .width(300)
-                .height(300)
-        }
-
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
 function getUploadFileButton(classname) {
     var div = document.createElement('div');
     var input = setAttributeToElement(
@@ -59,7 +59,6 @@ function getUploadFileButton(classname) {
             document
                 .createElement('a'),
             [
-                { name: 'href', value: '#' },
                 { name: 'class', value: 'btn btn-primary' }
             ]
         ),
@@ -79,9 +78,11 @@ function getUploadFileButton(classname) {
 
 function getCardFor(type, cardText) {
     let classname = (cardText == 'Watermark') ?
-                         'wm' :
-                         (cardText == 'Watermarked')?
-                         'wmed' : 'host';
+        'wm' :
+        (cardText == 'Watermarked') ?
+            'wmed' : 'host';
+
+    let form = document.createElement('form');
 
     let card = setAttributeToElement(
         document
@@ -130,7 +131,8 @@ function getCardFor(type, cardText) {
             ) :
             getUploadFileButton(classname)
     );
-    card.appendChild(body);
+    form.appendChild(body);
+    card.appendChild(form);
     return document
         .createElement('td')
         .appendChild(card);
