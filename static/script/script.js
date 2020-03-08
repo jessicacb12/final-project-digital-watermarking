@@ -1,26 +1,37 @@
 $.ajax({
     success: function () {
-        changeInputOutput();
-    }
-});
-
-$(document).ready(function () {
-    // send image to server side to get preview in return
-    $("input.host, input.wm, input.wmed").change(function (e) {
-        $.ajax({
-            type: 'POST',
-            url: `input/${e.target.className}`,
-            data: e.target.files[0],
-            processData: false,
-            contentType: false,
-            success: function (address) {
-                $(`img.${e.target.className}`)
-                    .attr('src', Flask.url_for("static", { "filename": address }))
-                    .width(300)
-                    .height(300)
-            }
+        loadAllInputOutput();
+        
+        //hide mode I/O when it's not selected
+        $("#mode").change(function (e) {
+            $(`.${e.target.options[
+                e.target.selectedIndex
+            ].value.toLowerCase()}`).show();
+            $(`.${e.target.options[
+                1 - parseInt(e.target.selectedIndex)
+            ].value.toLowerCase()}`).hide();
         });
-    });
+        
+        // select embed at first
+        $('#mode').val('Embed').change();
+
+        // send image to server side to get preview in return
+        $("input.host, input.wm, input.wmed").change(function (e) {
+            $.ajax({
+                type: 'POST',
+                url: `input/${e.target.className}`,
+                data: e.target.files[0],
+                processData: false,
+                contentType: false,
+                success: function (address) {
+                    $(`img.${e.target.className}`)
+                        .attr('src', Flask.url_for("static", { "filename": address }))
+                        .width(300)
+                        .height(300)
+                }
+            });
+        });
+    }
 });
 
 // Can-be-used-by-all functions
@@ -43,7 +54,7 @@ function setTextToElement(element, text) {
 
 // UI files functions
 
-function getUploadFileButton(classname) {
+function getUploadFileButton(type, classname) {
     var div = document.createElement('div');
     var input = setAttributeToElement(
         document.createElement('input'),
@@ -51,7 +62,6 @@ function getUploadFileButton(classname) {
             { name: 'type', value: 'file' },
             { name: 'accept', value: 'image/tiff' },
             { name: 'class', value: classname }
-            // { name: 'onchange', value: '' }
         ]
     );
     var btn = setTextToElement(
@@ -59,7 +69,7 @@ function getUploadFileButton(classname) {
             document
                 .createElement('a'),
             [
-                { name: 'class', value: 'btn btn-primary' }
+                { name: 'class', value: `${type} btn btn-primary` }
             ]
         ),
         'Upload'
@@ -76,7 +86,7 @@ function getUploadFileButton(classname) {
 
 //hardcoded card form
 
-function getCardFor(type, cardText) {
+function getCardFor(type, ioType, cardText) {
     let classname = (cardText == 'Watermark') ?
         'wm' :
         (cardText == 'Watermarked') ?
@@ -88,7 +98,7 @@ function getCardFor(type, cardText) {
         document
             .createElement("div"),
         [
-            { name: 'class', value: `card ${type}` }
+            { name: 'class', value: `card ${type} ${ioType}` }
         ]
     );
     card.appendChild(
@@ -96,13 +106,13 @@ function getCardFor(type, cardText) {
             document
                 .createElement('img'),
             [
-                { name: 'class', value: `card-img-top ${classname}` }
+                { name: 'class', value: `card-img-top ${type} ${classname}` }
             ]
         )
     );
     let body = setAttributeToElement(
         document.createElement('div'),
-        [{ name: 'class', value: 'card-body' }]
+        [{ name: 'class', value: `${type} card-body` }]
     )
     body.appendChild(
         setTextToElement(
@@ -110,26 +120,26 @@ function getCardFor(type, cardText) {
                 document
                     .createElement('h4'),
                 [
-                    { name: 'class', value: 'card-title' }
+                    { name: 'class', value: `${type} card-title` }
                 ]
             ),
             cardText
         )
     );
     body.appendChild(
-        (type == 'output') ?
+        (ioType == 'output') ?
             setTextToElement(
                 setAttributeToElement(
                     document
                         .createElement('a'),
                     [
                         { name: 'href', value: '#' },
-                        { name: 'class', value: 'btn btn-primary' }
+                        { name: 'class', value: `${type} btn btn-primary` }
                     ]
                 ),
                 'Process'
             ) :
-            getUploadFileButton(classname)
+            getUploadFileButton(type, classname)
     );
     form.appendChild(body);
     card.appendChild(form);
@@ -138,32 +148,30 @@ function getCardFor(type, cardText) {
         .appendChild(card);
 }
 
-function changeInputOutput() {
-    // let mode = document.getElementById('mode');
-    (document.getElementById('mode').value == 'Embed') ?
-        loadInputOutput([
+// only run in document ready
+
+function loadAllInputOutput() {
+    loadInputOutputFor(
+        'embed',
+        [
             ['input', 'Host Image'],
             ['input', 'Watermark'],
             ['output', 'Watermarked']
-        ]) :
-        loadInputOutput([
+        ]
+    )
+    loadInputOutputFor(
+        'extract',
+        [
             ['input', 'Watermarked'],
             ['output', 'Watermark']
-        ]);
+        ]
+    );
 }
 
-function removePreviousInputOutput() {
-    $('.input').remove();
-    $('.output').remove();
-}
-
-//hardcoded 2 input 1 output for host image, watermark, watermarked
-
-function loadInputOutput(IO) {
-    removePreviousInputOutput();
+function loadInputOutputFor(type, IO) {
     for (item of IO) {
         document
             .getElementById('files')
-            .appendChild(getCardFor(item[0], item[1]));
+            .appendChild(getCardFor(type, item[0], item[1]));
     }
 }

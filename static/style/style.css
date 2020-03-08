@@ -54,3 +54,6 @@
 input[type=file]{ 
     display: none;
 }
+a:not([href]):not([tabindex]) {
+    color: white;
+}

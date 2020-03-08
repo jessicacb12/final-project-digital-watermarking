@@ -9,8 +9,8 @@ class Process:
     WM = "wm.tiff"
     WMED = "wmed.tiff"
     PREVIEW_HOST = "data/preview_host.jpg"
-    PREVIEW_WM = "preview_wm.jpg"
-    PREVIEW_WMED = "preview_wmed.jpg"
+    PREVIEW_WM = "data/preview_wm.jpg"
+    PREVIEW_WMED = "data/preview_wmed.jpg"
 
     def __init__(self):
         self.host = None
