@@ -33,16 +33,33 @@ $.ajax({
         });
 
         // click process will start embedding
-        $("a.process").click(function (e) {
+        $("a.embed.process").click(function (e) {
             $.ajax({
                 type: 'POST',
                 url: 'embed',
                 processData: false,
                 contentType: false,
                 success: function (response) {
+                    $(`img.embed.wmed`)
+                        .attr('src', Flask.url_for("static", { "filename": response }))
+                        .width(300)
+                        .height(300)
                 }
             });
-        })
+        });
+
+        // click process will start extraction
+        $("a.extract.process").click(function (e) {
+            $.ajax({
+                type: 'POST',
+                url: 'extract',
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    
+                }
+            });
+        });
     }
 });
 

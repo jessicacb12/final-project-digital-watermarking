@@ -1,47 +1,62 @@
+"""This script is used define server routing."""
+
+import os
 from flask import Flask, render_template, request, url_for
 from flask_jsglue import JSGlue
 from watermarking import process as p
-import os
 
-process = p.Process()
-app = Flask(
+PROCESS = p.Process()
+APP = Flask(
     __name__,
     static_url_path=''
 )
-jsglue = JSGlue(app)
+JSGLUE = JSGlue(APP)
 
-@app.route('/')
+@APP.route('/')
 def index():
+    """Return client main view."""
     return render_template('index.html')
 
-# save image to process and give back preview
+@APP.route('/input/host', methods=['POST'])
+def store_host():
+    """Keep host image and return its preview."""
+    return PROCESS.get_preview_host(request.data)
 
-@app.route('/input/host', methods=['POST'])
-def storeHost():
-    return process.getPreviewHost(request.data)
+@APP.route('/input/wm', methods=['POST'])
+def store_watermark():
+    """Keep watermark image and return its preview."""
+    return PROCESS.get_preview_watermark(request.data)
 
-@app.route('/input/wm', methods=['POST'])
-def storeWatermark():
-    return process.getPreviewWM(request.data)
+@APP.route('/input/wmed', methods=['POST'])
+def store_watermarked():
+    """Keep watermarked image and return its preview."""
+    return PROCESS.get_preview_watermarked(request.data)
 
-@app.route('/input/wmed', methods=['POST'])
-def storeWatermarked():
-    return process.getPreviewWMED(request.data)
+@APP.route('/embed', methods=['POST'])
+def embed_watermark_to_host():
+    """Return embedded watermark image."""
+    return PROCESS.embed()
 
-@app.route('/embed', methods=['POST'])
-def embedWatermarkToHost():
-    process.embed()
+@APP.route('/extract', methods=['POST'])
+def extract_watermark():
+    """Return extracted watermark."""
+    PROCESS.extract()
     return render_template('index.html')
 
-@app.context_processor
+@APP.context_processor
 def override_url_for():
+    """Override url_for function."""
     return dict(url_for=dated_url_for)
 
 def dated_url_for(endpoint, **values):
+    """Override url_for function for opening static file."""
     if endpoint == 'static':
         filename = values.get('filename', None)
         if filename:
-            file_path = os.path.join(app.root_path,
-                                 endpoint, filename)
+            file_path = os.path.join(
+                APP.root_path,
+                endpoint, filename
+            )
             values['q'] = int(os.stat(file_path).st_mtime)
     return url_for(endpoint, **values)
+    

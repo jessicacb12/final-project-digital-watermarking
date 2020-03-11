@@ -1,10 +1,15 @@
+"""This script is used either to embed and extract watermark."""
+
 import cv2
 import numpy as np
 from PIL import Image
 from watermarking import attacks
 from watermarking import embedding
+from watermarking import extraction
 
 class Process:
+    """This process will be called in app.py."""
+
     ROOT = "static/"
     HOST = "host.tiff"
     WM = "wm.tiff"
@@ -17,53 +22,72 @@ class Process:
         self.host = None
         self.watermark = None
         self.watermarked = None
+        self.extracted_key = None
 
-    # util functions
+    def js_image_to_open_cv(self, byte_img):
+        """Function to decode js image to open cv format."""
+        return cv2.imdecode(np.frombuffer(byte_img, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
 
-    # function to decode js image to open cv format
-    def jsImageToOpenCV(self, byteImg):
-        return cv2.imdecode(np.frombuffer(byteImg, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-
-    def pilToOpenCV(self, img):
+    def pil_to_open_cv(self, img):
+        """Function to convert PIL to numpy array image."""
         pil_image = img.convert('RGB')
         open_cv_image = np.array(pil_image)
         return open_cv_image[:, :, ::-1].copy()
 
-    def openCVToPIL(self, img):
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    def open_cv_to_pil(self, img):
+        """Function to convert numpy array to PIL image."""
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         return Image.fromarray(img)
 
-    #watermarking functions
-
     def training(self):
+        """Function to training watermark extractor."""
         print('tes')
-    
+
     def embed(self):
-        embedding.Embedding().embed(self.host, self.watermark)
+        """Function to embed watermark."""
+        watermarked = embedding.Embedding().embed_watermark(self.host, self.watermark)
+        return self.create_preview(watermarked, embedding.Embedding.FILENAME + ".jpg")
         #everytime embedding is finished, clear host and watermark from system
 
     def extract(self):
-        print('extract')
+        """Function to extract watermark."""
+        extraction.Extraction().extract_watermark(self.watermarked)
 
-    #getter
+    def get_preview_host(self, img):
+        """Function to save host image and return its preview for html."""
+        self.host = self.js_image_to_open_cv(img)
+        return self.create_preview(
+            self.js_image_to_open_cv(img),
+            self.PREVIEW_HOST
+        )
 
-    # function to save image and return its preview for html
-    def getPreviewHost(self, img):
-        self.host = self.jsImageToOpenCV(img)
-        return self.createPreview(img, self.PREVIEW_HOST)
+    def get_preview_watermark(self, img):
+        """Function to save watermark image and return its preview for html."""
+        self.watermark = self.js_image_to_open_cv(img)
+        return self.create_preview(
+            self.js_image_to_open_cv(img),
+            self.PREVIEW_WM
+        )
 
-    def getPreviewWM(self, img):
-        self.watermark = self.jsImageToOpenCV(img)
-        return self.createPreview(img, self.PREVIEW_WM)
+    def get_preview_watermarked(self, img):
+        """Function to save watermarked image, extract its key and """
+        """return image preview for html."""
+        self.extracted_key = extraction.Extraction.extract_key_from_image_description(
+            img.decode(encoding='latin-1')
+        )
 
-    def getPreviewWMED(self, img):
-        self.watermarked = self.jsImageToOpenCV(img)
-        return self.createPreview(img, self.PREVIEW_WMED)
+        self.watermarked = self.js_image_to_open_cv(img)
+        print(self.watermarked.shape)
+        return self.create_preview(
+            self.js_image_to_open_cv(img),
+            self.PREVIEW_WMED
+        )
 
-    def createPreview(self, img, filename):
+    def create_preview(self, img, filename):
+        """Function to create JPEG preview for html."""
         transformation = attacks.Attacks()
-        transformation.compressJPEG(
-                self.openCVToPIL(self.jsImageToOpenCV(img)),
-                90
+        transformation.compress_jpeg(
+            self.open_cv_to_pil(img),
+            90
         ).save(self.ROOT + filename)
         return filename
