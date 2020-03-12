@@ -1,6 +1,8 @@
 $.ajax({
     success: function () {
-        loadAllInputOutput();
+        loadAllInputOutput(); //for embedding and extraction
+        //hide accordion
+        $("#accordion").hide();
 
         //hide mode I/O when it's not selected
         $("#mode").change(function (e) {
@@ -24,6 +26,7 @@ $.ajax({
                 processData: false,
                 contentType: false,
                 success: function (address) {
+                    //display result image
                     $(`img.${e.target.className}`)
                         .attr('src', Flask.url_for("static", { "filename": address }))
                         .width(300)
@@ -41,9 +44,10 @@ $.ajax({
                 contentType: false,
                 success: function (response) {
                     $(`img.embed.wmed`)
-                        .attr('src', Flask.url_for("static", { "filename": response }))
+                        .attr('src', Flask.url_for("static", { "filename": response.image }))
                         .width(300)
-                        .height(300)
+                        .height(300);
+                    showMetrics(response);
                 }
             });
         });
@@ -174,6 +178,17 @@ function getCardFor(type, ioType, cardText) {
     return document
         .createElement('td')
         .appendChild(card);
+}
+
+// metrics are shown in accordion
+function showMetrics(metricData){
+    $("#ssimValue").text(metricData.max);
+    $("#ssimExplanation").html(
+        `<p>Embedding in red: ${metricData.red}</p>
+        <p>Embedding in green: ${metricData.green}</p>
+        <p>Embedding in blue: ${metricData.blue}</p>`
+    );
+    $("#accordion").show();
 }
 
 // only run in document ready

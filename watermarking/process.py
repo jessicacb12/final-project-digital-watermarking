@@ -45,9 +45,15 @@ class Process:
 
     def embed(self):
         """Function to embed watermark."""
-        watermarked = embedding.Embedding().embed_watermark(self.host, self.watermark)
-        return self.create_preview(watermarked, embedding.Embedding.FILENAME + ".jpg")
-        #everytime embedding is finished, clear host and watermark from system
+        embedded = embedding.Embedding().embed_watermark(
+            self.host,
+            self.watermark
+        )
+        embedded["image"] = self.create_preview(
+            embedded["image"],
+            embedding.Embedding.FILENAME + ".jpg"
+        )
+        return embedded
 
     def extract(self):
         """Function to extract watermark."""

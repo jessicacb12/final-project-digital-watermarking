@@ -1,8 +1,9 @@
 """This script is used in embedding watermark to host image."""
 
+from copy import deepcopy
 from json import dumps
 from pywt import dwt2, idwt2
-from numpy import median
+from numpy import mean, median, std
 from tifffile import imsave
 from cv2 import cvtColor, COLOR_BGR2RGB, imread
 from watermarking import wavelet_diff
@@ -153,6 +154,7 @@ class Embedding:
 
     def put_back_color_in_image(self, color, single_color_image, ori_image):
         """Put back watermark embedded color channel to image"""
+
         for row in range(0, len(ori_image)):
             for col in range(0, len(ori_image[row])):
                 ori_image[row][col][color] = single_color_image[row][col]
@@ -168,17 +170,61 @@ class Embedding:
             ))
         )
 
-    def embed_watermark(self, host, watermark):
-        """Function that will be called to embed watermark. Return numpy array."""
-        to_be_embedded = self.get_single_color_image(self.BLUE, host)
+    def ssim(self, host, watermarked):
+        """Get similarity between host and watermarked image."""
+        mean_host = mean(host)
+        mean_watermarked = mean(watermarked)
+
+        std_host = std(host)
+        std_watermarked = std(watermarked)
+        c_1 = (0.01 * 255) ** 2
+        c_2 = (0.03 * 255) ** 2
+
+        return (
+            (2 * (mean_host * mean_watermarked) + c_1) * (2 * (std_host * std_watermarked) + c_2)
+        ) / (
+            (mean_host ** 2 + mean_watermarked ** 2 + c_1) * (std_host ** 2 + std_watermarked ** 2 + c_2)
+        )
+
+    def embed_on_particular_channel(self, channel, host, watermark):
+        """Function that will be called to embed watermark on particular channel. Return watermarked image and ssim."""
+        watermarked = deepcopy(host)
+        to_be_embedded = self.get_single_color_image(channel, host)
 
         main, (vertical, horizontal, diagonal) = dwt2(to_be_embedded, 'haar')
         horizontal, vertical, key = self.embed_to_subbands(watermark, horizontal, vertical)
         embedded = idwt2((main, (vertical, horizontal, diagonal)), 'haar')
+        # at this point to_be_embedded and embedded are different
 
-        watermarked = self.put_back_color_in_image(self.BLUE, embedded, host)
+        watermarked = self.put_back_color_in_image(channel, embedded, watermarked)
 
         # because openCV flips the order of RGB to BGR
         self.save_tiff(cvtColor(watermarked, COLOR_BGR2RGB), key)
-        return imread(process.Process.ROOT + self.FILENAME + ".tif")
-        
+        return (
+            imread(process.Process.ROOT + self.FILENAME + ".tif"),
+            self.ssim(
+                host,
+                watermarked
+            )
+        )
+
+    def embed_watermark(self, host, watermark):
+        """Function that will return image with best SSIM based on channel."""
+        map_result = dict(
+            red=self.embed_on_particular_channel(self.RED, host, watermark),
+            green=self.embed_on_particular_channel(self.GREEN, host, watermark),
+            blue=self.embed_on_particular_channel(self.BLUE, host, watermark)
+        )
+        result = {}
+        max_data = [-1, -1]
+
+        for key, value in map_result.items():
+            result[key] = value[1]
+            if value[1] > max_data[1]:
+                max_data[0] = key
+                max_data[1] = value[1]
+        result["image"] = map_result[max_data[0]][0]
+        result["max"] = max_data[1]
+
+        return result
+
