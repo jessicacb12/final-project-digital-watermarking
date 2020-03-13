@@ -1,14 +1,15 @@
 """This script is used define server routing."""
 
 import os
-from flask import Flask, render_template, request, url_for
+from flask import Flask, render_template, request, url_for, send_from_directory
 from flask_jsglue import JSGlue
 from watermarking import process as p
 
 PROCESS = p.Process()
 APP = Flask(
     __name__,
-    static_url_path=''
+    static_url_path='',
+    static_folder='static'
 )
 JSGLUE = JSGlue(APP)
 
@@ -42,6 +43,15 @@ def extract_watermark():
     """Return extracted watermark."""
     PROCESS.extract()
     return render_template('index.html')
+
+@APP.route('/data/<path:filename>', methods=['GET'])
+def download(filename):
+    """Return file to be downloaded."""
+    try:
+        response = send_from_directory(directory='static/data', filename=str(filename))
+    except FileNotFoundError:
+        return {}
+    return response
 
 @APP.context_processor
 def override_url_for():

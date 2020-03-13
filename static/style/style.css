@@ -31,8 +31,8 @@ body{
 .processor {
     margin-left: 7%;
 }
-table.processor {
-    margin-bottom: 7%;
+table.files-table {
+    margin-bottom: 3%;
 }
 .processor.header{
     display: inline-block;
@@ -54,9 +54,6 @@ table.processor {
 .output{
     margin-left: 70px;
 }
-input[type=file]{ 
-    display: none;
-}
 a:not([href]):not([tabindex]) {
     color: white;
 }
@@ -67,4 +64,8 @@ a:not([href]):not([tabindex]) {
 
 .accordion {
     display: contents;
+}
+
+a.download {
+    margin-left: 10px;
 }

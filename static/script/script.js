@@ -1,7 +1,8 @@
 $.ajax({
     success: function () {
         loadAllInputOutput(); //for embedding and extraction
-        //hide accordion
+
+        // hide accordion
         $("#accordion").hide();
 
         //hide mode I/O when it's not selected
@@ -12,42 +13,85 @@ $.ajax({
             $(`.${e.target.options[
                 1 - parseInt(e.target.selectedIndex)
             ].value.toLowerCase()}`).hide();
+
+            // disable download button
+            $(`a.${e.target.options[
+                e.target.selectedIndex
+            ].value.toLowerCase()}.download`)[0].classList.add("disabled");
         });
 
         // select embed at first
         $('#mode').val('Embed').change();
 
+        // hide input and show primary button instead
+        $("input[type='file']").hide();
+
         // send image to server side to get preview in return
         $("input.host, input.wm, input.wmed").change(function (e) {
             $.ajax({
                 type: 'POST',
-                url: `input/${e.target.className}`,
+                url: `input/${e.target.classList[1]}`,
                 data: e.target.files[0],
                 processData: false,
                 contentType: false,
                 success: function (address) {
                     //display result image
-                    $(`img.${e.target.className}`)
+                    address += ".jpg";
+                    $(`img.${e.target.classList[1]}`)
                         .attr('src', Flask.url_for("static", { "filename": address }))
                         .width(300)
-                        .height(300)
+                        .height(300);
                 }
             });
         });
 
         // click process will start embedding
         $("a.embed.process").click(function (e) {
+            // display loading
+            $(this).html(
+                '<div id="loading"><span class="spinner-grow spinner-grow-sm"></span>Loading..</div>'
+            );
+            //disable button temporarily
+            $(this)[0].classList.add('disabled');
+
             $.ajax({
                 type: 'POST',
                 url: 'embed',
                 processData: false,
                 contentType: false,
                 success: function (response) {
-                    $(`img.embed.wmed`)
-                        .attr('src', Flask.url_for("static", { "filename": response.image }))
-                        .width(300)
-                        .height(300);
-                    showMetrics(response);
+                    // enable button
+                    e.target.classList.remove("disabled");
+
+                    // remove loading
+                    $('div#loading').remove();
+                    e.target = setTextToElement(e.target, "Process");
+
+                    if (response.image != undefined) {
+                        // show preview image
+                        $(`img.embed.wmed`)
+                            .attr(
+                                'src',
+                                Flask.url_for(
+                                    "static",
+                                    { "filename": (response.image + ".jpg") }
+                                )
+                            )
+                            .width(300)
+                            .height(300);
+                        // show ssim
+                        showMetrics(response);
+                        // downloadable image
+                        $("a.embed.download")
+                            .attr(
+                                'href',
+                                Flask.url_for(
+                                    "static",
+                                    { "filename": (response.image + ".tif") }
+                                )
+                            );
+                        $("a.embed.download")[0].classList.remove("disabled");
+                    }
                 }
             });
         });
@@ -60,7 +104,7 @@ $.ajax({
                 processData: false,
                 contentType: false,
                 success: function (response) {
-                    
+
                 }
             });
         });
@@ -94,7 +138,7 @@ function getUploadFileButton(type, classname) {
         [
             { name: 'type', value: 'file' },
             { name: 'accept', value: 'image/tiff' },
-            { name: 'class', value: classname }
+            { name: 'class', value: `${type} ${classname}` }
         ]
     );
     var btn = setTextToElement(
@@ -173,6 +217,21 @@ function getCardFor(type, ioType, cardText) {
             ) :
             getUploadFileButton(type, classname)
     );
+    if (ioType == 'output') {
+        body.appendChild(
+            setTextToElement(
+                setAttributeToElement(
+                    document
+                        .createElement('a'),
+                    [
+                        { name: 'class', value: `${type} download btn btn-primary` },
+                        { name: 'download', value: "image.tif" }
+                    ]
+                ),
+                'Download'
+            )
+        )
+    }
     form.appendChild(body);
     card.appendChild(form);
     return document
@@ -181,7 +240,7 @@ function getCardFor(type, ioType, cardText) {
 }
 
 // metrics are shown in accordion
-function showMetrics(metricData){
+function showMetrics(metricData) {
     $("#ssimValue").text(metricData.max);
     $("#ssimExplanation").html(
         `<p>Embedding in red: ${metricData.red}</p>

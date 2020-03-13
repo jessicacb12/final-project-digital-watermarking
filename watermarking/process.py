@@ -14,15 +14,12 @@ class Process:
     HOST = "host.tiff"
     WM = "wm.tiff"
     WMED = "wmed.tiff"
-    PREVIEW_HOST = "data/preview_host.jpg"
-    PREVIEW_WM = "data/preview_wm.jpg"
-    PREVIEW_WMED = "data/preview_wmed.jpg"
+    PREVIEW_HOST = "data/preview_host"
+    PREVIEW_WM = "data/preview_wm"
+    PREVIEW_WMED = "data/preview_wmed"
 
     def __init__(self):
-        self.host = None
-        self.watermark = None
-        self.watermarked = None
-        self.extracted_key = None
+        self.reset_input_data()
 
     def js_image_to_open_cv(self, byte_img):
         """Function to decode js image to open cv format."""
@@ -39,20 +36,31 @@ class Process:
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         return Image.fromarray(img)
 
+    def reset_input_data(self):
+        """Method to reset data so that new request = new processing"""
+        self.host = None
+        self.watermark = None
+        self.watermarked = None
+        self.extracted_key = None
+
     def training(self):
         """Function to training watermark extractor."""
         print('tes')
 
     def embed(self):
         """Function to embed watermark."""
+        if self.host is None or self.watermark is None:
+            return {}
+
         embedded = embedding.Embedding().embed_watermark(
             self.host,
             self.watermark
         )
         embedded["image"] = self.create_preview(
             embedded["image"],
-            embedding.Embedding.FILENAME + ".jpg"
+            embedding.Embedding.FILENAME
         )
+        self.reset_input_data()
         return embedded
 
     def extract(self):
@@ -95,5 +103,5 @@ class Process:
         transformation.compress_jpeg(
             self.open_cv_to_pil(img),
             90
-        ).save(self.ROOT + filename)
+        ).save(self.ROOT + filename + ".jpg")
         return filename
