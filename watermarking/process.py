@@ -50,7 +50,9 @@ class Process:
     def embed(self):
         """Function to embed watermark."""
         if self.host is None or self.watermark is None:
-            return {}
+            return {
+                "error": "Please upload your watermark and your image that will be embedded with watermark."
+            }
 
         embedded = embedding.Embedding().embed_watermark(
             self.host,
@@ -64,7 +66,17 @@ class Process:
         return embedded
 
     def extract(self):
-        """Function to extract watermark."""
+        """Function to extract watermark if watermarked image is uploaded and key exists."""
+        if self.watermarked is None:
+            return {
+                "error": "Please upload your watermarked image"
+            }
+
+        if self.extracted_key is None:
+            return {
+                "error": "This image has no watermark or watermark key is lost"
+            }            
+
         extraction.Extraction().extract_watermark(self.watermarked)
 
     def get_preview_host(self, img):

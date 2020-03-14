@@ -44,29 +44,12 @@
         For now this project can only process TIFF files. 
         Previews below are in JPEG so real images might be different.
     </p>
+    <p id="error"></p>
     <table class="processor files-table">
         <tr id="files">
         </tr>
     </table>
-    <div id="accordion">
-        <div class="card accordion">
-          <div class="card-header">
-            <a class="card-link" data-toggle="collapse" href="#ssim">
-              SSIM: <span id="ssimValue"></span>
-            </a>
-          </div>
-          <div id="ssim" class="collapse" data-parent="#accordion">
-            <div class="card-body">
-                <div id="ssimExplanation"></div>
-                <p>
-                    Structural Similarity Index (SSIM) is a metric to show similarity between 
-                    two images with 0 means no similarity and 1 means images are perfectly similar. 
-                    In this project, SSIM shows similarity between original and watermarked images.
-                </p>
-            </div>
-          </div>
-        </div>
-    </div>
+    <div id="accordion"></div>
 </body>
 
 </html>

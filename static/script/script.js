@@ -1,9 +1,13 @@
 $.ajax({
     success: function () {
         loadAllInputOutput(); //for embedding and extraction
+        loadAccordionsAsMetric(); //to show metrics and give explanations
+        $(".btn:not(.process):not(.download)").on('click', function () {
+            $(this)[0].nextSibling.nextElementSibling.click();
+        });
 
-        // hide accordion
-        $("#accordion").hide();
+        // only show error text if there is any error
+        $("#error").hide();
 
         //hide mode I/O when it's not selected
         $("#mode").change(function (e) {
@@ -18,16 +22,21 @@ $.ajax({
             $(`a.${e.target.options[
                 e.target.selectedIndex
             ].value.toLowerCase()}.download`)[0].classList.add("disabled");
+
+            // hide input and show primary button instead
+            $("input[type='file']").hide();
+
+            // hide accordion
+            $(`.accordion.${e.target.options[
+                e.target.selectedIndex
+            ].value.toLowerCase()}`).hide();
         });
 
         // select embed at first
         $('#mode').val('Embed').change();
 
-        // hide input and show primary button instead
-        $("input[type='file']").hide();
-
         // send image to server side to get preview in return
-        $("input.host, input.wm, input.wmed").change(function (e) {
+        $("input.embed.host, input.embed.wm, input.extract.wmed").change(function (e) {
             $.ajax({
                 type: 'POST',
                 url: `input/${e.target.classList[1]}`,
@@ -37,7 +46,7 @@ $.ajax({
                 success: function (address) {
                     //display result image
                     address += ".jpg";
-                    $(`img.${e.target.classList[1]}`)
+                    $(`img.${e.target.classList[0]}.${e.target.classList[1]}`)
                         .attr('src', Flask.url_for("static", { "filename": address }))
                         .width(300)
                         .height(300);
@@ -45,8 +54,8 @@ $.ajax({
             });
         });
 
-        // click process will start embedding
-        $("a.embed.process").click(function (e) {
+        // click process will start embedding or extraction
+        $("a.embed.process, a.extract.process").click(function (e) {
             // display loading
             $(this).html(
                 '<div id="loading"><span class="spinner-grow spinner-grow-sm"></span>Loading..</div>'
@@ -54,9 +63,11 @@ $.ajax({
             //disable button temporarily
             $(this)[0].classList.add('disabled');
 
+            $("#error").hide();
+
             $.ajax({
                 type: 'POST',
-                url: 'embed',
+                url: e.target.classList[0],
                 processData: false,
                 contentType: false,
                 success: function (response) {
@@ -65,11 +76,11 @@ $.ajax({
 
                     // remove loading
                     $('div#loading').remove();
-                    e.target = setTextToElement(e.target, "Process");
+                    e.target.text = "Process";
 
-                    if (response.image != undefined) {
+                    if (response.error == undefined) {
                         // show preview image
-                        $(`img.embed.wmed`)
+                        $(`img.${e.target.classList[0]}.${(e.target.classList[0] === 'embed') ? 'wmed' : 'wm'}`)
                             .attr(
                                 'src',
                                 Flask.url_for(
@@ -81,8 +92,10 @@ $.ajax({
                             .height(300);
                         // show ssim
                         showMetrics(response);
+                        $(`.accordion.${e.target.classList[0]}`).show();
+
                         // downloadable image
-                        $("a.embed.download")
+                        $(`a.${e.target.classList[0]}.download`)
                             .attr(
                                 'href',
                                 Flask.url_for(
@@ -90,75 +103,40 @@ $.ajax({
                                     { "filename": (response.image + ".tif") }
                                 )
                             );
-                        $("a.embed.download")[0].classList.remove("disabled");
+                        $(`a.${e.target.classList[0]}.download`)[0]
+                            .classList
+                            .remove("disabled");
+                    } else {
+                        //show error
+                        $("#error").text(response.error);
+                        $("#error").show();
                     }
-                }
-            });
-        });
-
-        // click process will start extraction
-        $("a.extract.process").click(function (e) {
-            $.ajax({
-                type: 'POST',
-                url: 'extract',
-                processData: false,
-                contentType: false,
-                success: function (response) {
-
                 }
             });
         });
     }
 });
 
-// Can-be-used-by-all functions
-
-function setAttributeToElement(element, attributes) {
-    attributes.forEach(attr => {
-        var attrHTML = document.createAttribute(attr.name);
-        attrHTML.value = attr.value;
-        element.setAttributeNode(attrHTML);
-    });
-    return element;
-}
-
-function setTextToElement(element, text) {
-    element.appendChild(
-        document.createTextNode(text)
-    );
-    return element;
-}
-
 // UI files functions
 
-function getUploadFileButton(type, classname) {
-    var div = document.createElement('div');
-    var input = setAttributeToElement(
-        document.createElement('input'),
-        [
-            { name: 'type', value: 'file' },
-            { name: 'accept', value: 'image/tiff' },
-            { name: 'class', value: `${type} ${classname}` }
-        ]
+function getUploadFileButton(button, classname) {
+    let input = $(
+        "<input>",
+        {
+            "type": "file",
+            "accept": "image/tiff",
+            "class": `${button[0].classList[0]} ${classname}`,
+            "style": "display: none"
+        }
     );
-    var btn = setTextToElement(
-        setAttributeToElement(
-            document
-                .createElement('a'),
-            [
-                { name: 'class', value: `${type} btn btn-primary` }
-            ]
-        ),
-        'Upload'
-    );
+    button.text("Upload");
 
-    btn.addEventListener('click', function () {
-        input.click();
-    });
-
-    div.appendChild(input);
-    div.appendChild(btn);
-    return div;
+    let div = $("<div>")
+    div.html(`
+        ${button[0].outerHTML}
+        ${input[0].outerHTML}
+    `);
+    return div[0].outerHTML;
 }
 
 //hardcoded card form
@@ -169,74 +147,55 @@ function getCardFor(type, ioType, cardText) {
         (cardText == 'Watermarked') ?
             'wmed' : 'host';
 
-    let form = document.createElement('form');
+    let button1 = $("<a>", { 'class': `${type} btn btn-primary` });
 
-    let card = setAttributeToElement(
-        document
-            .createElement("div"),
-        [
-            { name: 'class', value: `card ${type} ${ioType}` }
-        ]
-    );
-    card.appendChild(
-        setAttributeToElement(
-            document
-                .createElement('img'),
-            [
-                { name: 'class', value: `card-img-top ${type} ${classname}` }
-            ]
-        )
-    );
-    let body = setAttributeToElement(
-        document.createElement('div'),
-        [{ name: 'class', value: `${type} card-body` }]
-    )
-    body.appendChild(
-        setTextToElement(
-            setAttributeToElement(
-                document
-                    .createElement('h4'),
-                [
-                    { name: 'class', value: `${type} card-title` }
-                ]
-            ),
-            cardText
-        )
-    );
-    body.appendChild(
-        (ioType == 'output') ?
-            setTextToElement(
-                setAttributeToElement(
-                    document
-                        .createElement('a'),
-                    [
-                        { name: 'class', value: `${type} process btn btn-primary` }
-                    ]
-                ),
-                'Process'
-            ) :
-            getUploadFileButton(type, classname)
-    );
     if (ioType == 'output') {
-        body.appendChild(
-            setTextToElement(
-                setAttributeToElement(
-                    document
-                        .createElement('a'),
-                    [
-                        { name: 'class', value: `${type} download btn btn-primary` },
-                        { name: 'download', value: "image.tif" }
-                    ]
-                ),
-                'Download'
-            )
-        )
+        button1.text("Process");
+        button1[0].classList.add("process");
+    } else {
+        button1 = getUploadFileButton(button1, classname);
     }
-    form.appendChild(body);
-    card.appendChild(form);
-    return document
-        .createElement('td')
-        .appendChild(card);
+
+    let button2 = (ioType == 'output') ?
+        `<a class="${type} download btn btn-primary" download="image.tif">Download</a>`
+        : '';
+
+    return `
+        <td>
+            <div class="card ${type} ${ioType}">
+                <img class="card-img-top ${type} ${classname}">
+                <form>
+                    <div class="${type} card-body">
+                        <h4 class="${type} card-title">${cardText}</h4>
+                        ${(ioType == 'output') ? button1[0].outerHTML : button1} 
+                        ${button2}
+                    </div>
+                </form>
+            </div>
+        </td>
+    `
+}
+
+// hardcoded accordion
+
+function metricAccordion(type, data) {
+    return `
+    <div class="card accordion ${type}">
+        <div class="card-header">
+            <a class="card-link" data-toggle="collapse" href="#${data.id}">
+            ${data.title} <span id="${data.id}Value"></span>
+            </a>
+        </div>
+        <div id="${data.id}" class="collapse" data-parent="#accordion">
+            <div class="card-body">
+                <div id="${data.id}Explanation"></div>
+                <p>
+                    ${data.description}
+                </p>
+            </div>
+        </div>
+    </div>
+    `;
 }
 
 // metrics are shown in accordion
@@ -250,30 +209,49 @@ function showMetrics(metricData) {
     $("#accordion").show();
 }
 
-// only run in document ready
+// initialize I/O and metrics
 
 function loadAllInputOutput() {
     loadInputOutputFor(
         'embed',
         [
-            ['input', 'Host Image'],
-            ['input', 'Watermark'],
-            ['output', 'Watermarked']
+            { 'IOType': 'input', 'title': 'Host Image' },
+            { 'IOType': 'input', 'title': 'Watermark' },
+            { 'IOType': 'output', 'title': 'Watermarked' }
         ]
     )
     loadInputOutputFor(
         'extract',
         [
-            ['input', 'Watermarked'],
-            ['output', 'Watermark']
+            { 'IOType': 'input', 'title': 'Watermarked' },
+            { 'IOType': 'output', 'title': 'Watermark' }
         ]
     );
 }
 
 function loadInputOutputFor(type, IO) {
     for (item of IO) {
-        document
-            .getElementById('files')
-            .appendChild(getCardFor(type, item[0], item[1]));
+        $("#files").append(getCardFor(type, item.IOType, item.title));
+    }
+}
+
+function loadAccordionsAsMetric() {
+    loadAccordionsFor(
+        'embed',
+        [
+            {
+                'id': 'ssim',
+                'title': 'SSIM: ',
+                'description': `Structural Similarity Index (SSIM) is a metric to show similarity between 
+                two images with 0 means no similarity and 1 means images are perfectly similar. 
+                In this project, SSIM shows similarity between original and watermarked images.`
+            }
+        ]
+    );
+}
+
+function loadAccordionsFor(type, accordions) {
+    for (item of accordions) {
+        $('#accordion').append(metricAccordion(type, item));
     }
 }

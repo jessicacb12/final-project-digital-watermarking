@@ -41,8 +41,7 @@ def embed_watermark_to_host():
 @APP.route('/extract', methods=['POST'])
 def extract_watermark():
     """Return extracted watermark."""
-    PROCESS.extract()
-    return render_template('index.html')
+    return PROCESS.extract()
 
 @APP.route('/data/<path:filename>', methods=['GET'])
 def download(filename):
@@ -50,7 +49,9 @@ def download(filename):
     try:
         response = send_from_directory(directory='static/data', filename=str(filename))
     except FileNotFoundError:
-        return {}
+        return {
+            "error": "File is not found"
+        }
     return response
 
 @APP.context_processor
