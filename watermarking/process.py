@@ -77,7 +77,7 @@ class Process:
                 "error": "This image has no watermark or watermark key is lost"
             }            
 
-        extraction.Extraction().extract_watermark(self.watermarked)
+        extraction.Extraction().extract_watermark(self.watermarked, self.extracted_key)
 
     def get_preview_host(self, img):
         """Function to save host image and return its preview for html."""

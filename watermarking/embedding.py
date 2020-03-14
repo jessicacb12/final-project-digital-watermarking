@@ -17,22 +17,25 @@ class Embedding:
     BLUE = 2
     FILENAME = "data/watermarked_result"
 
-    def get_color_at(self, color, image, col, row):
+    @staticmethod
+    def get_color_at(color, image, col, row):
         """Return single color channel of pixel."""
         return image[row][col][color]
 
-    def get_single_color_image(self, color, image):
+    @staticmethod
+    def get_single_color_image(color, image):
         """Return single color channel of image."""
         single_color_image = []
 
         for row in range(0, len(image) - 1):
             colors = []
             for col in range(0, len(image[row]) - 1):
-                colors.append(self.get_color_at(color, image, col, row))
+                colors.append(Embedding.get_color_at(color, image, col, row))
             single_color_image.append(colors)
         return single_color_image
 
-    def get_wave_diff(self, horizontal, vertical):
+    @staticmethod
+    def get_wave_diff(horizontal, vertical):
         """Get wavelet difference from horizontal and vertical."""
         return abs(horizontal - vertical)
 
@@ -43,7 +46,7 @@ class Embedding:
             for j in range(0, len(horizontals)):
                 wavelet_diffs.append(
                     wavelet_diff.WaveletDiff(
-                        self.get_wave_diff(horizontals[i][j], verticals[i][j]),
+                        Embedding.get_wave_diff(horizontals[i][j], verticals[i][j]),
                         j,
                         i
                     )
@@ -189,7 +192,7 @@ class Embedding:
     def embed_on_particular_channel(self, channel, host, watermark):
         """Function that will be called to embed watermark on particular channel. Return watermarked image and ssim."""
         watermarked = deepcopy(host)
-        to_be_embedded = self.get_single_color_image(channel, host)
+        to_be_embedded = Embedding.get_single_color_image(channel, host)
 
         main, (vertical, horizontal, diagonal) = dwt2(to_be_embedded, 'haar')
         horizontal, vertical, key = self.embed_to_subbands(watermark, horizontal, vertical)
