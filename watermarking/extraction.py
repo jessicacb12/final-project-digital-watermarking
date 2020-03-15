@@ -1,6 +1,6 @@
 """This script is used to extract watermark from watermarked image."""
 
-from re import findall
+from re import findall, search
 from math import sqrt
 from pywt import dwt2
 from watermarking import embedding
@@ -11,6 +11,9 @@ class Extraction:
     def get_positions_from_key(self, key):
         """Get positions from text key."""
         combined_positions = findall('([0-9]+,[0-9]+)', key)
+        if len(combined_positions) == 0:
+            return None
+
         positions = []
         for combined in combined_positions:
             str_positions = combined.split(",")
@@ -18,6 +21,13 @@ class Extraction:
                 [int(str_positions[0]), int(str_positions[1])]
             )
         return positions
+
+    def extract_channel_from_key(self, key):
+        """Extract channel from extracted key."""
+        return search(
+            '[0-3]$',
+            search('{"key": "[0-3]', key).group()
+        ).group()
 
     @staticmethod
     def extract_key_from_image_description(img):
@@ -53,11 +63,19 @@ class Extraction:
 
     def extract_watermark(self, watermarked, key):
         """Extract watermark from watermarked image."""
+        positions = self.get_positions_from_key(key)
+        channel = None
+        try:
+            channel = self.extract_channel_from_key(key)
+        except AttributeError:
+            return "Channel is not detected in key"
 
-        #hardcoded color channel. need to be fixed later
+        if positions is None:
+            return "Locations are not detected in key"
+
         embedding_map = self.extract_embedding_map(
             embedding.Embedding.get_single_color_image(
-                embedding.Embedding.GREEN,
+                int(channel),
                 watermarked
             ),
             self.get_positions_from_key(key)

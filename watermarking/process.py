@@ -75,9 +75,17 @@ class Process:
         if self.extracted_key is None:
             return {
                 "error": "This image has no watermark or watermark key is lost"
-            }            
+            }
 
-        extraction.Extraction().extract_watermark(self.watermarked, self.extracted_key)
+        result = extraction.Extraction().extract_watermark(
+            self.watermarked,
+            self.extracted_key
+        )
+
+        if isinstance(result, str):
+            return {
+                "error": result
+            }
 
     def get_preview_host(self, img):
         """Function to save host image and return its preview for html."""
@@ -101,9 +109,7 @@ class Process:
         self.extracted_key = extraction.Extraction.extract_key_from_image_description(
             img.decode(encoding='latin-1')
         )
-
         self.watermarked = self.js_image_to_open_cv(img)
-        print(self.watermarked.shape)
         return self.create_preview(
             self.js_image_to_open_cv(img),
             self.PREVIEW_WMED

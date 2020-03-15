@@ -54,9 +54,9 @@ class Embedding:
         descended = sorted(wavelet_diffs, key=lambda x: x.value, reverse=True)
         return descended[0:num_of_result]
 
-    def create_key(self, wavelet_diffs, px_per_row):
+    def create_key(self, wavelet_diffs, px_per_row, channel):
         """Create key to get watermark from host on extraction."""
-        text = ''
+        text = str(channel) + "-"
         current_row_length = 1
         for data in wavelet_diffs:
             text += ("(" + str(data.x) + "," + str(data.y) + ")")
@@ -136,7 +136,7 @@ class Embedding:
                 k += 1
         return horizontal, vertical
 
-    def embed_to_subbands(self, watermark, horizontal, vertical):
+    def embed_to_subbands(self, watermark, horizontal, vertical, channel):
         """Return created key and watermark-embedded horizontal and vertical."""
         wavelet_diffs = self.get_descending_wavelet_diffs(
             horizontal,
@@ -144,7 +144,7 @@ class Embedding:
             (len(watermark) ** 2)
         )
 
-        key = self.create_key(wavelet_diffs, len(watermark))
+        key = self.create_key(wavelet_diffs, len(watermark), channel)
 
         horizontal, vertical = self.embed_based_on_wavelet_diffs(
             wavelet_diffs,
@@ -190,25 +190,25 @@ class Embedding:
         )
 
     def embed_on_particular_channel(self, channel, host, watermark):
-        """Function that will be called to embed watermark on particular channel. Return watermarked image and ssim."""
+        """Function that will be called to embed watermark on particular channel. 
+        Return watermarked image and ssim."""
         watermarked = deepcopy(host)
         to_be_embedded = Embedding.get_single_color_image(channel, host)
 
         main, (vertical, horizontal, diagonal) = dwt2(to_be_embedded, 'haar')
-        horizontal, vertical, key = self.embed_to_subbands(watermark, horizontal, vertical)
+        horizontal, vertical, key = self.embed_to_subbands(watermark, horizontal, vertical, channel)
         embedded = idwt2((main, (vertical, horizontal, diagonal)), 'haar')
         # at this point to_be_embedded and embedded are different
 
         watermarked = self.put_back_color_in_image(channel, embedded, watermarked)
 
-        # because openCV flips the order of RGB to BGR
-        self.save_tiff(cvtColor(watermarked, COLOR_BGR2RGB), key)
         return (
-            imread(process.Process.ROOT + self.FILENAME + ".tif"),
+            watermarked,
             self.ssim(
                 host,
                 watermarked
-            )
+            ),
+            key
         )
 
     def embed_watermark(self, host, watermark):
@@ -219,15 +219,23 @@ class Embedding:
             blue=self.embed_on_particular_channel(self.BLUE, host, watermark)
         )
         result = {}
-        max_data = [-1, -1]
+        max_data = [-1] * 2
 
         for key, value in map_result.items():
             result[key] = value[1]
             if value[1] > max_data[1]:
                 max_data[0] = key
                 max_data[1] = value[1]
-        result["image"] = map_result[max_data[0]][0]
+
+        # save image that will be used later
+        # because openCV flips the order of RGB to BGR
+        self.save_tiff(cvtColor(
+            map_result[max_data[0]][0],
+            COLOR_BGR2RGB),
+                       map_result[max_data[0]][2]
+                      )
+
+        result["image"] = imread(process.Process.ROOT + self.FILENAME + ".tif")
         result["max"] = max_data[1]
 
         return result
-

@@ -5,10 +5,7 @@ $.ajax({
         $(".btn:not(.process):not(.download)").on('click', function () {
             $(this)[0].nextSibling.nextElementSibling.click();
         });
-
-        // only show error text if there is any error
-        $("#error").hide();
-
+        
         //hide mode I/O when it's not selected
         $("#mode").change(function (e) {
             $(`.${e.target.options[
@@ -18,6 +15,9 @@ $.ajax({
                 1 - parseInt(e.target.selectedIndex)
             ].value.toLowerCase()}`).hide();
 
+            // only show error text if there is any error
+            $("#error").hide();
+            
             // disable download button
             $(`a.${e.target.options[
                 e.target.selectedIndex
