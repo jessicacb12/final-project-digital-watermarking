@@ -4,6 +4,7 @@ from re import findall, search
 from math import sqrt
 from pywt import dwt2
 from watermarking import embedding
+from watermarking import cnn
 
 class Extraction:
     """Contains CNN and the rest of watermark extraction methods."""
@@ -80,3 +81,5 @@ class Extraction:
             ),
             self.get_positions_from_key(key)
         )
+        network = cnn.CNN(embedding_map)
+        network.init_params()
