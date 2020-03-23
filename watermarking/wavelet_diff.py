@@ -1,11 +1,10 @@
 """This script is to encapsulate wavelet diff and its position as an object."""
+from watermarking import value_with_position
 
-class WaveletDiff:
-    """Only contains attributes and static method."""
+class WaveletDiff(value_with_position.ValueWithPosition):
+    """Only contains static method."""
     def __init__(self, value, x, y):
-        self.value = value
-        self.x = x
-        self.y = y
+        super(self)
 
     @staticmethod
     def get_array_of_values_from(wavelet_diffs):
