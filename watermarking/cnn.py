@@ -1,10 +1,7 @@
 """This script is to process data with CNN either training or testing"""
 
-from os import path
 from numpy import (
     random,
-    add,
-    flip,
     sqrt,
     mean,
     var,
@@ -14,7 +11,7 @@ from numpy import (
     log,
     float32
 )
-from scipy.signal import convolve2d
+from numpy import max as max_from_array
 from watermarking import value_with_position
 
 class CNN:
@@ -23,7 +20,6 @@ class CNN:
     CONVOLUTION_KERNEL_SIZE = 7
     POOLING_KERNEL_SIZE = 2
     POOLING_STRIDE = 2
-    BATCH_SIZE = 4
     CONVOLUTION_ORDERS = [
         [2, 64],
         [2, 128],
@@ -34,21 +30,18 @@ class CNN:
     ENCODER = "enc"
     DECODER = "dec"
 
-    def __init__(self, embedding_map):
+    def __init__(
+            self,
+            embedding_map=None,
+            training_images=None,
+            istraining=False
+        ):
+        self.istraining = istraining
+        self.training_images = training_images
         self.embedding_map = embedding_map
-        self.kernels = {}
-        self.batch_norm_param = {
-            "beta": 0,
-            "gamma": 1
-        }
-        #Initialize pooling indexes storage per stack for each batch member
-        self.pooling_indexes = [
-            [
-                [None] * len(self.CONVOLUTION_ORDERS)
-            ] * self.BATCH_SIZE
-        ]
 
-    def create_matrix(self, values, side):
+    @staticmethod
+    def create_matrix(values, side):
         """Create side x side matrix"""
         kernel = []
         row = []
@@ -59,18 +52,20 @@ class CNN:
                 row = []
         return kernel
 
-    def init_kernel(self):
+    @staticmethod
+    def init_kernel():
         """Initialize single kernel 7x7 """
-        return(self.create_matrix(
+        return(CNN.create_matrix(
             random.normal(
                 0,
                 0.01,
-                self.CONVOLUTION_KERNEL_SIZE ** 2
+                CNN.CONVOLUTION_KERNEL_SIZE ** 2
             ),
-            self.CONVOLUTION_KERNEL_SIZE
+            CNN.CONVOLUTION_KERNEL_SIZE
         ))
 
-    def init_kernels(self, part, stack_number, layer_number, ch_number):
+    @staticmethod
+    def init_kernels(part, stack_number, layer_number, ch_number):
         """Initialize single layer kernels"""
         kernel_name = (
             part +
@@ -80,53 +75,61 @@ class CNN:
             "-" +
             str(ch_number)
         )
+        kernel = []
         try:
-            self.kernels[
-                kernel_name
-            ] = self.read_kernel(
+            kernel = CNN.read_kernel(
                 kernel_name
             )
         except FileNotFoundError:
-            self.kernels[
-                kernel_name
-            ] = self.init_kernel()
+            kernel = CNN.init_kernel()
+        return (kernel_name, kernel)
 
-    def init_layers(self, stack_number, part):
+    @staticmethod
+    def init_layers(kernels, stack_number, part):
         """Initialize layers per stack"""
-        for i in range(0, self.CONVOLUTION_ORDERS[stack_number][0]): # layer
-            for j in range(0, self.CONVOLUTION_ORDERS[stack_number][1]): # channel
-                self.init_kernels(part, stack_number, i, j)
+        for i in range(0, CNN.CONVOLUTION_ORDERS[stack_number][0]): # layer
+            for j in range(0, CNN.CONVOLUTION_ORDERS[stack_number][1]): # channel
+                name, kernel = CNN.init_kernels(part, stack_number, i, j)
+                kernels[name] = kernel
+        return kernels
 
-    def init_encoders(self):
+    @staticmethod
+    def init_encoders(kernels):
         """Initialize encoder convolutions. PLEASE RUN THIS FUNCTION JUST ONCE"""
-        for i in range(0, len(self.CONVOLUTION_ORDERS)): # stack
-            self.init_layers(i, self.ENCODER)
+        for i in range(0, len(CNN.CONVOLUTION_ORDERS)): # stack
+            kernels = CNN.init_layers(kernels, i, CNN.ENCODER)
+        return kernels
 
-    def init_decoders(self):
+    @staticmethod
+    def init_decoders(kernels):
         """Initialize decoder convolutions. PLEASE RUN THIS FUNCTION JUST ONCE"""
-        for i in range(len(self.CONVOLUTION_ORDERS) - 1, -1, -1): # stack
-            self.init_layers(i, self.DECODER)
+        for i in range(len(CNN.CONVOLUTION_ORDERS) - 1, -1, -1): # stack
+            kernels = CNN.init_layers(kernels, i, CNN.DECODER)
+        return kernels
 
-    def store_kernel(self, file, rows):
+    @staticmethod
+    def store_kernel(file, rows):
         """Store kernels"""
         for row in rows:
             text = ""
             for number in row:
-                text += str(number)
+                text += (str(number) + " ")
             file.write(text + "\n")
         return file
 
-    def store_param(self, param, part):
+    @staticmethod
+    def store_param(param, part):
         """Store params into text file"""
         for key, value in param.items():
             file = open("static/params/" + key + ".txt", "w")
             if part == 'kernel':
-                self.store_kernel(file, param)
+                CNN.store_kernel(file, value)
             else:
-                file.write(value)
+                file.write(str(value))
             file.close()
 
-    def read_kernel(self, filename):
+    @staticmethod
+    def read_kernel(filename):
         """Read kernel from file"""
         str_values = ""
         arr = []
@@ -134,23 +137,27 @@ class CNN:
             file = open("static/params/" + filename + ".txt")
             str_values = file.readlines()
             for string in str_values:
-                arr.append(string.strip().split(" "))
+                arr.append(
+                    array(string.strip().split(" "), dtype=float32)
+                )
             file.close()
             return arr
         except FileNotFoundError:
             raise
 
-    def read_batch_norm(self):
+    @staticmethod
+    def read_batch_norm(batch_norm_param):
         """Read batch norm params from file"""
         try:
             file = open("static/params/beta.txt")
-            self.batch_norm_param["beta"] = float(file.read())
+            batch_norm_param["beta"] = float(file.read())
             file.close()
             file = open("static/params/gamma.txt")
-            self.batch_norm_param["gamma"] = float(file.read())
+            batch_norm_param["gamma"] = float(file.read())
             file.close()
         except FileNotFoundError:
             pass
+        return batch_norm_param
 
     # tensorflow tested: tf.nn.batch_normalization(
         # a,
@@ -160,19 +167,35 @@ class CNN:
         # tf.constant(np.ones(len(a)), dtype=tf.float32),
         # 0.001
     #)
-    def batch_norm(self, matrix, beta, gamma, epsilon=0.001):
+    @staticmethod
+    def batch_norm(matrix, beta, gamma, epsilon=0.001):
         """Calculate batch normalization from single matrix"""
         average = mean(matrix)
         variance = var(matrix)
-        normalized_data = []
-        for number in matrix:
-            normalized_data.append(
-                (number - average)/(sqrt(variance + epsilon)) * gamma + beta
-            )
-        return normalized_data
+
+        # number_mean_arr = []
+        # normalized_data = []
+        # scaled_shift_data = []
+
+        number_mean = matrix - average
+        normalized = number_mean/(sqrt(variance + epsilon))
+        scaled_shift_data = normalized * gamma + beta
+
+        # for number in matrix:
+        #     number_mean = number - average
+        #     number_mean_arr.append(number_mean)
+        #     normalized = number_mean/(sqrt(variance + epsilon))
+        #     normalized_data.append(normalized)
+        #     scaled_shift_data.append(
+        #         normalized * gamma + beta
+        #     )
+        return scaled_shift_data, (
+            normalized, number_mean, variance, epsilon
+        )
 
     # manual tested
-    def relu(self, matrix):
+    @staticmethod
+    def relu(matrix):
         """Process matrix with non activation ReLU function"""
         for i, row in enumerate(matrix, start=0):
             for j, value in enumerate(row, start=0):
@@ -180,51 +203,65 @@ class CNN:
         return matrix
 
     # manual tested
-    def max_pooling(self, matrix):
+    @staticmethod
+    def max_pooling(matrix):
         """Max pooling 2 x 2 filter with stride 2"""
         result = []
         max_index = []
         for i in range(0, len(matrix) // 2):
             row = []
+            row_index = []
             for j in range(0, len(matrix[i]) // 2):
                 max_value = max(
                     value_with_position.ValueWithPosition(
-                        matrix[i * self.POOLING_STRIDE][j * self.POOLING_STRIDE],
-                        j * self.POOLING_STRIDE,
-                        i * self.POOLING_STRIDE
+                        matrix[i * CNN.POOLING_STRIDE][j * CNN.POOLING_STRIDE],
+                        j * CNN.POOLING_STRIDE,
+                        i * CNN.POOLING_STRIDE
                     ),
                     value_with_position.ValueWithPosition(
-                        matrix[i * self.POOLING_STRIDE][j * self.POOLING_STRIDE + 1],
-                        j * self.POOLING_STRIDE + 1,
-                        i * self.POOLING_STRIDE
+                        matrix[i * CNN.POOLING_STRIDE][j * CNN.POOLING_STRIDE + 1],
+                        j * CNN.POOLING_STRIDE + 1,
+                        i * CNN.POOLING_STRIDE
                     ),
                     value_with_position.ValueWithPosition(
-                        matrix[i * self.POOLING_STRIDE + 1][j * self.POOLING_STRIDE],
-                        j * self.POOLING_STRIDE,
-                        i * self.POOLING_STRIDE + 1
+                        matrix[i * CNN.POOLING_STRIDE + 1][j * CNN.POOLING_STRIDE],
+                        j * CNN.POOLING_STRIDE,
+                        i * CNN.POOLING_STRIDE + 1
                     ),
                     value_with_position.ValueWithPosition(
-                        matrix[i * self.POOLING_STRIDE + 1][j * self.POOLING_STRIDE + 1],
-                        j * self.POOLING_STRIDE + 1,
-                        i * self.POOLING_STRIDE + 1
+                        matrix[i * CNN.POOLING_STRIDE + 1][j * CNN.POOLING_STRIDE + 1],
+                        j * CNN.POOLING_STRIDE + 1,
+                        i * CNN.POOLING_STRIDE + 1
                     ),
                     key=lambda x: x.value
                 )
                 row.append(
                     max_value.value
                 )
-                max_index.append([max_value.x, max_value.y])
+                row_index.append([max_value.x, max_value.y])
             result.append(row)
+            max_index.append(row_index)
         return result, max_index
 
+    @staticmethod
+    def upsampling(max_pooled, cache):
+        """Create sparse matrix based on index and max pooled result"""
+        sparse_matrix = [[0] * cache[1]] * cache[0]
+        for i, row in enumerate(cache[2]):
+            for j, index in enumerate(row):
+                sparse_matrix[index[1]][index[0]] = max_pooled[i][j]
+        return sparse_matrix
+
     # tensorflow tested: tf.nn.softmax(matrix)
-    def softmax(self, matrix):
+    @staticmethod
+    def softmax(matrix):
         """Compute softmax values for each sets of scores in matrix."""
-        e_x = exp(matrix - max(matrix))
+        e_x = exp(matrix - max_from_array(matrix))
         return e_x / e_x.sum()
 
-    # tensorflow tested: tf.keras.losses.BinaryCrossentropy() <call>    
-    def cross_entropy_loss(self, predicted_matrix, ground_truth_matrix):
+    # tensorflow tested: tf.keras.losses.BinaryCrossentropy() <call>
+    @staticmethod
+    def cross_entropy_loss(predicted_matrix, ground_truth_matrix):
         """Return the cross entropy loss between
         ground truth and predicted one"""
         predicted_matrix = array(predicted_matrix, dtype=float32)
@@ -238,64 +275,20 @@ class CNN:
         )
         return mean(result)
 
-    def init_params(self):
+    @staticmethod
+    def init_params():
         """Initialize CNN params"""
-        self.read_batch_norm()
-        self.init_encoders()
-        self.init_decoders()
-            # self.store_param(self.kernels)
-            # self.store_param(self.batch_norm)
-
-    def conv_per_stack(self, part, stack_number, batch):
-        """Convolution as many as number of layers and channels in current stack number"""
-        convolved_batch = []
-        for matrix in batch:
-            convolved_member = matrix
-            for layer_no in range(self.CONVOLUTION_ORDERS[stack_number][0]):
-                for ch_no in range(self.CONVOLUTION_ORDERS[stack_number][1]):
-                    convolved_member = convolve2d(
-                        convolved_member,
-                        flip(
-                            self.kernels[
-                                part +
-                                str(stack_number) +
-                                "-" +
-                                str(layer_no) +
-                                "-" +
-                                str(ch_no)
-                            ]
-                        ),
-                        mode='same'
-                    ) if ch_no == 0 else add(
-                        convolve2d(
-                            convolved_member,
-                            flip(
-                                self.kernels[
-                                    part +
-                                    str(stack_number) +
-                                    "-" +
-                                    str(layer_no) +
-                                    "-" +
-                                    str(ch_no)
-                                ]
-                            ),
-                            mode='same'
-                        )
-                    )
-            convolved_batch.append(convolved_member)
-
-    def relu_per_batch(self, batch):
-        """Process each batch member with ReLU"""
-        relued_batch = []
-        for matrix in batch:
-            relued_batch.append(self.relu(matrix))
-        return relued_batch
-
-    def max_pooling_per_batch(self, batch, pooling_order):
-        """Process each batch member with max pooling"""
-        max_pooled_batch = []
-        for i, matrix in enumerate(batch, start=0):
-            result, max_index = self.max_pooling(matrix)
-            max_pooled_batch.append(result)
-            self.pooling_indexes[i][pooling_order] = max_index
-        return max_pooled_batch
+        print('initializing', flush=True)
+        batch_norm = {'beta' : 0, 'gamma' : 1}
+        batch_norm = CNN.read_batch_norm(batch_norm)
+        return (
+            batch_norm,
+            CNN.init_encoders({}),
+            CNN.init_decoders({})
+        )
+    # def run(self):
+    #     """Run CNN either it's training or testing"""
+    #     self.init_params()
+    #     # if self.istraining:
+    #     #     self.training()
+             
