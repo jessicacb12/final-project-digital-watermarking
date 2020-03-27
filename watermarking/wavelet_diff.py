@@ -4,7 +4,7 @@ from watermarking import value_with_position
 class WaveletDiff(value_with_position.ValueWithPosition):
     """Only contains static method."""
     def __init__(self, value, x, y):
-        super(self)
+        value_with_position.ValueWithPosition.__init__(self, value, x, y)
 
     @staticmethod
     def get_array_of_values_from(wavelet_diffs):

@@ -3,7 +3,8 @@
 from copy import deepcopy
 from json import dumps
 from pywt import dwt2, idwt2
-from numpy import mean, median, std
+from numpy import mean, median, std, dot, sum
+from numpy.linalg import norm
 from tifffile import imsave
 from cv2 import cvtColor, COLOR_BGR2RGB, imread
 from watermarking import wavelet_diff
@@ -42,11 +43,11 @@ class Embedding:
     def get_descending_wavelet_diffs(self, horizontals, verticals, num_of_result):
         """Return <number of desired results> wavelet diffs from horizontal and vertical."""
         wavelet_diffs = []
-        for i in range(0, len(horizontals)):
-            for j in range(0, len(horizontals)):
+        for i, row in enumerate(horizontals):
+            for j, horizontal in enumerate(row):
                 wavelet_diffs.append(
                     wavelet_diff.WaveletDiff(
-                        Embedding.get_wave_diff(horizontals[i][j], verticals[i][j]),
+                        Embedding.get_wave_diff(horizontal, verticals[i][j]),
                         j,
                         i
                     )
@@ -115,8 +116,8 @@ class Embedding:
         payload0, payload1 = self.get_x_array(threshold0, threshold1, wavelet_diffs)
 
         k = 0
-        for i in range(0, len(watermark)):
-            for j in range(0, len(watermark[0])):
+        for row in watermark:
+            for pixel in row:
                 y = wavelet_diffs[k].y
                 x = wavelet_diffs[k].x
 
@@ -126,7 +127,7 @@ class Embedding:
                     horizontal[y][x],
                     vertical[y][x],
                     payload0[k]
-                ) if watermark[i][j] == 0 else self.embed_1(
+                ) if pixel == 0 else self.embed_1(
                     wavelet_diffs[k].value,
                     threshold1,
                     horizontal[y][x],
@@ -158,9 +159,9 @@ class Embedding:
     def put_back_color_in_image(self, color, single_color_image, ori_image):
         """Put back watermark embedded color channel to image"""
 
-        for row in range(0, len(ori_image)):
-            for col in range(0, len(ori_image[row])):
-                ori_image[row][col][color] = single_color_image[row][col]
+        for i, row in enumerate(ori_image):
+            for j, pixel in enumerate(row):
+                pixel[color] = single_color_image[i][j]
         return ori_image
 
     def save_tiff(self, image, str_key):
@@ -189,8 +190,12 @@ class Embedding:
             (mean_host ** 2 + mean_watermarked ** 2 + c_1) * (std_host ** 2 + std_watermarked ** 2 + c_2)
         )
 
+    def normalized_correlation_coef(self, extracted, watermark):
+        """Calculate NC of extracted watermark against the original one."""
+        return sum(dot(extracted, watermark) / (norm(extracted) * norm(watermark)))
+
     def embed_on_particular_channel(self, channel, host, watermark):
-        """Function that will be called to embed watermark on particular channel. 
+        """Function that will be called to embed watermark on particular channel.
         Return watermarked image and ssim."""
         watermarked = deepcopy(host)
         to_be_embedded = Embedding.get_single_color_image(channel, host)

@@ -288,7 +288,6 @@ class CNN:
         )
     # def run(self):
     #     """Run CNN either it's training or testing"""
-    #     self.init_params()
     #     # if self.istraining:
     #     #     self.training()
              
