@@ -77,7 +77,7 @@ class Forward:
         #     self.max_pooling_cache,
         #     self.softmax_cache
         # )
-        return self.softmax_into_single_output(self.inputs)
+        return self.softmax_into_single_output(decoded)
 
     def init_cache(self):
         """Initialize cache for each backprop later"""
@@ -127,7 +127,7 @@ class Forward:
                     part
                 ][
                     stack_number
-                ].append([])
+                ].append(matrix)
 
             for channel in range(
                     cnn.CNN.CONVOLUTION_ORDERS[stack_number][1]
@@ -146,18 +146,6 @@ class Forward:
                     ),
                     mode='same'
                 )
-
-                if self.istraining:
-                    #keep into cache
-                    self.convolution_cache[
-                        batch_number
-                    ][
-                        part
-                    ][
-                        stack_number
-                    ][
-                        layer
-                    ].append(feature_map)
 
                 combined_feature_maps = feature_map if(
                     channel == 0
