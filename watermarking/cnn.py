@@ -12,7 +12,8 @@ from numpy import (
     float32,
     delete,
     newaxis,
-    zeros
+    zeros,
+    ones
 )
 from numpy import max as max_from_array
 from numpy import sum as sum_array
@@ -21,6 +22,7 @@ from watermarking import value_with_position
 class CNN:
     """Keeps atrribute embedding map and weight"""
 
+    INPUT_SIZE = 64
     CONVOLUTION_KERNEL_SIZE = 7
     POOLING_KERNEL_SIZE = 2
     POOLING_STRIDE = 2
@@ -48,22 +50,20 @@ class CNN:
     def init_params():
         """Initialize CNN params"""
         print('initializing', flush=True)
-        batch_norm = {'beta' : 0, 'gamma' : 1}
-        batch_norm = CNN.read_batch_norm(batch_norm)
         return (
-            batch_norm,
+            CNN.init_batch_norm(),
             CNN.init_encoders({}),
             CNN.init_decoders({})
         )
 
     @staticmethod
-    def create_matrix(values, side):
-        """Create side x side matrix"""
+    def create_matrix(values, row_length):
+        """Create values / row_length x row_length matrix"""
         kernel = []
         row = []
         for value in values:
             row.append(value)
-            if len(row) == side:
+            if len(row) == row_length:
                 kernel.append(row)
                 row = []
         return kernel
@@ -124,6 +124,31 @@ class CNN:
         return kernels
 
     @staticmethod
+    def init_batch_norm():
+        """Initialize batch norms gamma beta."""
+        batch_norm_params = {}
+        for part in [CNN.ENCODER, CNN.DECODER]:
+            side = CNN.INPUT_SIZE
+            for i in range(0, len(CNN.CONVOLUTION_ORDERS)):
+                batch_norm_params[
+                    part + "-" + str(i) + "-gamma"
+                ] = CNN.init_single_batch_norm_param(
+                    part + "-" + str(i),
+                    "gamma",
+                    side
+                )
+                batch_norm_params[
+                    part + "-" + str(i) + "-beta"
+                ] = CNN.init_single_batch_norm_param(
+                    part + "-" + str(i),
+                    "beta",
+                    side
+                )
+                side //= 2
+
+        return batch_norm_params
+
+    @staticmethod
     def store_kernel(file, rows):
         """Store kernels"""
         for row in rows:
@@ -141,7 +166,11 @@ class CNN:
             if part == 'kernel':
                 CNN.store_kernel(file, value)
             else:
-                file.write(str(value))
+                file.write(
+                    ''.join(
+                        (str(i) + " ") for i in value
+                    )
+                )
             file.close()
 
     @staticmethod
@@ -162,21 +191,22 @@ class CNN:
             raise
 
     @staticmethod
-    def read_batch_norm(batch_norm_param):
-        """Read batch norm params from file"""
+    def init_single_batch_norm_param(param_structure, param_name, row_length):
+        """Read batch norm params from file or initialize it directly"""
+        param = None
         try:
-            file = open("static/params/beta.txt")
-            batch_norm_param["beta"] = float(file.read())
-            file.close()
-            file = open("static/params/gamma.txt")
-            batch_norm_param["gamma"] = float(file.read())
+            file = open(
+                "static/params/" +
+                param_structure + "-" + param_name +
+                ".txt"
+            )
+            param = array(file.readline().strip().split(" "), dtype=float32)
             file.close()
         except FileNotFoundError:
-            pass
-        return batch_norm_param
+            param = zeros(row_length) if param_name == 'beta' else ones(row_length)
+        return param
 
     # Forward area
-
 
     # beta and gamma should me matrix 1 x input length instead of scalar
     # tensorflow tested: tf.nn.batch_normalization(
