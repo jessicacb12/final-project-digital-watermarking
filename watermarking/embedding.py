@@ -3,9 +3,10 @@
 from copy import deepcopy
 from json import dumps
 from pywt import dwt2, idwt2
-from numpy import mean, median, std, dot, sum
+from numpy import mean, median, std, dot, sum, uint8
 from numpy.linalg import norm
-from tifffile import imsave
+from PIL.Image import fromarray
+from PIL.TiffImagePlugin import ImageFileDirectory
 from cv2 import cvtColor, COLOR_BGR2RGB, imread
 from watermarking import wavelet_diff
 from watermarking import process
@@ -17,6 +18,7 @@ class Embedding:
     GREEN = 1
     BLUE = 2
     FILENAME = "data/watermarked_result"
+    KEY_LOCATION = 37000
 
     @staticmethod
     def get_color_at(color, image, col, row):
@@ -166,12 +168,14 @@ class Embedding:
 
     def save_tiff(self, image, str_key):
         """Save both image and key to tiff file."""
-        imsave(
+        pil_img = fromarray(uint8(image))
+        info = ImageFileDirectory()
+        info[self.KEY_LOCATION] = dumps(dict(
+            key=str_key
+        ))
+        pil_img.save(
             process.Process.ROOT + self.FILENAME + ".tif",
-            image,
-            description=dumps(dict(
-                key=str_key
-            ))
+            tiffinfo=info
         )
 
     def ssim(self, host, watermarked):
