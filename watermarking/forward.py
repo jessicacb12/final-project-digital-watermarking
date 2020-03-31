@@ -51,7 +51,12 @@ class Forward:
                     image, self.ENCODER, i, batch
                 )
                 if self.istraining:
-                    image = self.batch_norm_per_stack(image, batch)
+                    image = self.batch_norm_per_stack(
+                        image,
+                        cnn.CNN.ENCODER,
+                        i,
+                        batch
+                    )
                 image = self.relu_per_stack(image, batch)
                 image = self.max_pooling_per_stack(image, batch)
             encoded.append(image)
@@ -68,7 +73,12 @@ class Forward:
                     image, self.DECODER, i, batch
                 )
                 if self.istraining:
-                    image = self.batch_norm_per_stack(image, batch)
+                    image = self.batch_norm_per_stack(
+                        image,
+                        cnn.CNN.DECODER,
+                        i,
+                        batch
+                    )
             decoded.append(image)
         # return self.softmax_into_single_output(self.inputs), (
         #     self.convolution_cache,
@@ -77,7 +87,7 @@ class Forward:
         #     self.max_pooling_cache,
         #     self.softmax_cache
         # )
-        return self.softmax_into_single_output(decoded)
+        return self.softmax_per_batch(decoded)
 
     def init_cache(self):
         """Initialize cache for each backprop later"""
@@ -153,13 +163,13 @@ class Forward:
             matrix = combined_feature_maps
         return matrix
 
-    def batch_norm_per_stack(self, matrix, batch_number):
+    def batch_norm_per_stack(self, matrix, part, stack_number, batch_number):
         """Process each batch member with Batch Normalization"""
         print('BN', flush=True)
         result, cache = cnn.CNN.batch_norm(
             matrix,
-            self.scale_shift["beta"],
-            self.scale_shift['gamma']
+            self.scale_shift[part + "-" + stack_number + "-beta"],
+            self.scale_shift[part+ "-" + stack_number + '-gamma']
         )
         self.batch_norm_cache[batch_number].append(cache)
         return result
@@ -197,17 +207,14 @@ class Forward:
             indices
         )
 
-    def softmax_into_single_output(self, matrices):
+    def softmax_per_batch(self, matrices):
         """Process each batch into averaged softmax output"""
         print('Softmax', flush=True)
         if self.istraining:
-            total_softmax = None
-            for i, matrix in enumerate(matrices):
+            softmax_per_batch = []
+            for matrix in matrices:
                 self.softmax_cache.append(matrix)
-                result = cnn.CNN.softmax(matrix)
-                total_softmax = result if(
-                    i == 0
-                )else add(total_softmax, result)
-            return total_softmax / len(matrices)
+                softmax_per_batch.append(cnn.CNN.softmax(matrix))
+            return softmax_per_batch
         else:
             return cnn.CNN.softmax(matrices)
