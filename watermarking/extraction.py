@@ -3,6 +3,7 @@
 from re import findall, search
 from math import sqrt
 from pywt import dwt2
+from PIL.Image import open
 from watermarking import embedding
 
 class Extraction:
@@ -28,6 +29,12 @@ class Extraction:
             '[0-3]$',
             search('{"key": "[0-3]', key).group()
         ).group()
+
+    @staticmethod
+    def extract_key_from_image_file(location):
+        """Extract key from KEY_LOCATION tag from image file"""
+        img = open(location)
+        return img.tag_v2[embedding.Embedding.KEY_LOCATION]
 
     @staticmethod
     def extract_key_from_image_description(img):
@@ -80,3 +87,4 @@ class Extraction:
             ),
             self.get_positions_from_key(key)
         )
+        return embedding_map

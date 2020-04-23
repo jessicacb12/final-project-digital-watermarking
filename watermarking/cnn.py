@@ -13,10 +13,13 @@ from numpy import (
     delete,
     newaxis,
     zeros,
-    ones
+    ones,
+    flip,
+    argmax
 )
-from numpy import max as max_from_array
+# from numpy import max as max_from_array
 from numpy import sum as sum_array
+from scipy.signal import convolve2d
 from watermarking import value_with_position
 
 class CNN:
@@ -26,13 +29,23 @@ class CNN:
     CONVOLUTION_KERNEL_SIZE = 7
     POOLING_KERNEL_SIZE = 2
     POOLING_STRIDE = 2
-    CONVOLUTION_ORDERS = [
-        [2, 64],
-        [2, 128],
-        [3, 256],
-        [3, 512],
-        [3, 512]
-    ]
+    PADDING_SIZE = 3
+    CONVOLUTION_ORDERS = {
+        "enc": [
+            [2, 64],
+            [2, 128],
+            [3, 256],
+            [3, 512],
+            [3, 512]
+        ],
+        "dec": [
+            [2, 1],
+            [2, 64],
+            [3, 128],
+            [3, 256],
+            [3, 512]
+        ]
+    }
     ENCODER = "enc"
     DECODER = "dec"
 
@@ -53,7 +66,8 @@ class CNN:
         return (
             CNN.init_batch_norm(),
             CNN.init_encoders({}),
-            CNN.init_decoders({})
+            CNN.init_decoders({}),
+            CNN.init_softmax_kernels()
         )
 
     @staticmethod
@@ -73,24 +87,29 @@ class CNN:
         """Initialize single kernel 7x7 """
         return(CNN.create_matrix(
             random.normal(
-                0,
-                0.01,
-                CNN.CONVOLUTION_KERNEL_SIZE ** 2
+                0, 0.1, CNN.CONVOLUTION_KERNEL_SIZE ** 2
             ),
             CNN.CONVOLUTION_KERNEL_SIZE
         ))
 
     @staticmethod
-    def init_kernels(part, stack_number, layer_number, ch_number):
+    def init_kernels(
+            part=None,
+            stack_number=None,
+            layer_number=None,
+            ch_number=None,
+            kernel_name=None
+        ):
         """Initialize single layer kernels"""
-        kernel_name = (
-            part +
-            str(stack_number) +
-            "-" +
-            str(layer_number) +
-            "-" +
-            str(ch_number)
-        )
+        if kernel_name is None:
+            kernel_name = (
+                part +
+                str(stack_number) +
+                "-" +
+                str(layer_number) +
+                "-" +
+                str(ch_number)
+            )
         kernel = []
         try:
             kernel = CNN.read_kernel(
@@ -103,23 +122,29 @@ class CNN:
     @staticmethod
     def init_layers(kernels, stack_number, part):
         """Initialize layers per stack"""
-        for i in range(0, CNN.CONVOLUTION_ORDERS[stack_number][0]): # layer
-            for j in range(0, CNN.CONVOLUTION_ORDERS[stack_number][1]): # channel
+        for i in range(
+                0,
+                CNN.CONVOLUTION_ORDERS[part][stack_number][0]
+            ): # layer
+            for j in range(
+                    0,
+                    CNN.CONVOLUTION_ORDERS[part][stack_number][1]
+                ): # channel
                 name, kernel = CNN.init_kernels(part, stack_number, i, j)
                 kernels[name] = kernel
         return kernels
 
     @staticmethod
     def init_encoders(kernels):
-        """Initialize encoder convolutions. PLEASE RUN THIS FUNCTION JUST ONCE"""
-        for i in range(0, len(CNN.CONVOLUTION_ORDERS)): # stack
+        """Initialize convolutional layers for SegNet particular part"""
+        for i in range(0, len(CNN.CONVOLUTION_ORDERS[CNN.ENCODER])): # stack
             kernels = CNN.init_layers(kernels, i, CNN.ENCODER)
         return kernels
 
     @staticmethod
     def init_decoders(kernels):
-        """Initialize decoder convolutions. PLEASE RUN THIS FUNCTION JUST ONCE"""
-        for i in range(len(CNN.CONVOLUTION_ORDERS) - 1, -1, -1): # stack
+        """Initialize convolutional layers for SegNet particular part"""
+        for i in range(len(CNN.CONVOLUTION_ORDERS[CNN.DECODER]) - 1, -1, -1): # stack
             kernels = CNN.init_layers(kernels, i, CNN.DECODER)
         return kernels
 
@@ -129,7 +154,8 @@ class CNN:
         batch_norm_params = {}
         for part in [CNN.ENCODER, CNN.DECODER]:
             side = CNN.INPUT_SIZE
-            for i in range(0, len(CNN.CONVOLUTION_ORDERS)):
+            for i in range(0, len(CNN.CONVOLUTION_ORDERS[part])):
+                print(part, ' ', i, ' -> ', side)
                 batch_norm_params[
                     part + "-" + str(i) + "-gamma"
                 ] = CNN.init_single_batch_norm_param(
@@ -147,6 +173,16 @@ class CNN:
                 side //= 2
 
         return batch_norm_params
+
+    @staticmethod
+    def init_softmax_kernels():
+        """Initialize kernels for softmax."""
+        kernels = {}
+        name, foreground = CNN.init_kernels(kernel_name="softmax-fg")
+        kernels[name] = foreground
+        name, background = CNN.init_kernels(kernel_name="softmax-bg")
+        kernels[name] = background
+        return kernels
 
     @staticmethod
     def store_kernel(file, rows):
@@ -291,26 +327,45 @@ class CNN:
                 sparse_matrix[index[1]][index[0]] = max_pooled[i][j]
         return sparse_matrix
 
+    @staticmethod
+    def trainable_softmax(kernels, matrix):
+        """Return classified matrix"""
+        foreground = convolve2d(
+            matrix,
+            flip(kernels["softmax-fg"]),
+            mode='same'
+        )
+        background = convolve2d(
+            matrix,
+            flip(kernels["softmax-bg"]),
+            mode='same'
+        )
+
+        return [
+            CNN.softmax(background, foreground), #predict bg
+            CNN.softmax(foreground, background) #predict fg
+        ]
+
     # tensorflow tested: tf.nn.softmax(matrix)
     @staticmethod
-    def softmax(matrix):
+    def softmax(compared, compared_with):
         """Compute softmax values for each sets of scores in matrix."""
-        e_x = exp(matrix - max_from_array(matrix))
-        return e_x / e_x.sum_array(axis=0)
+        return exp(compared) / sum_array(exp(compared) + exp(compared_with))
 
     # tensorflow tested: tf.keras.losses.BinaryCrossentropy() <call>
     @staticmethod
-    def cross_entropy_loss(predicted_matrix, ground_truth_matrix):
+    def cross_entropy_loss(positive_pred, negative_pred, ground_truth_matrix):
         """Return the cross entropy loss between
         ground truth and predicted one"""
-        predicted_matrix = array(predicted_matrix, dtype=float32)
+        positive_pred = array(positive_pred, dtype=float32)
+        negative_pred = array(negative_pred, dtype=float32)
         ground_truth_matrix = array(ground_truth_matrix, dtype=float32)
         result = - multiply(
             ground_truth_matrix,
-            log(predicted_matrix)
+            log(positive_pred)
         ) - multiply(
             (1 - ground_truth_matrix),
-            log(1 - predicted_matrix)
+            log(negative_pred)
         )
         return mean(result)
 
@@ -347,11 +402,11 @@ class CNN:
                 #deleting current element from e_x
                 total_with_no_current = delete(e_x, i * e_x.shape[1] + j)
                 to_be_divided_row.append(
-                    exp(pixel) * total_with_no_current.sum_array(axis=0)
+                    exp(pixel) * total_with_no_current.sum(axis=0)
                 )
             to_be_divided.append(to_be_divided_row)
 
-        return to_be_divided /(e_x.sum_array(axis=0) ** 2)
+        return to_be_divided /(e_x.sum(axis=0) ** 2)
 
     # reference @14prakash tested
     @staticmethod
@@ -359,7 +414,21 @@ class CNN:
         """Compute weight gradient by error_result * convolution_input"""
         convolution_input = array(convolution_input, dtype=float32)
         error_result = array(error_result, dtype=float32)
-        return error_result * convolution_input
+        return convolve2d(
+            CNN.padded(convolution_input, CNN.PADDING_SIZE),
+            error_result,
+            mode='valid'
+        )
+
+    # manually tested
+    @staticmethod
+    def padded(arr_data, padding):
+        """Give padding with custom size to matrix"""
+        expanded = zeros((len(arr_data) + (padding * 2), len(arr_data[0]) + (padding * 2)))
+        for i, row in enumerate(arr_data):
+            for j, pixel in enumerate(row):
+                expanded[i + padding][j + padding] = pixel
+        return expanded
 
     # reference @14prakash tested
     @staticmethod
@@ -370,29 +439,17 @@ class CNN:
         ):
         """Update weight of current kernel"""
         current_kernel_weight = array(current_kernel_weight, dtype=float32)
-        error_result = (
-            batch_member_weight_gradient.sum_array(axis=0) /
-            len(batch_member_weight_gradient)
-        )
-        return current_kernel_weight - learning_rate * error_result
-
+        return current_kernel_weight - learning_rate * batch_member_weight_gradient
 
     # reference @14prakash tested
     @staticmethod
     def derivative_convolution(before_update_kernel_weight, error_result):
         """Process convolution derivative by error_result * weight"""
-        before_update_kernel_weight = array(
-            before_update_kernel_weight,
-            dtype=float32
+        return convolve2d(
+            error_result,
+            flip(before_update_kernel_weight),
+            mode='same'
         )
-        result = sum_array(
-            array(error_result, dtype=float32) *
-            before_update_kernel_weight,
-            axis=1
-        )
-
-        result = result.transpose()[newaxis]
-        return result.T
 
     # manually tested
     @staticmethod

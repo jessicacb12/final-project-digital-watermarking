@@ -194,7 +194,8 @@ class Embedding:
             (mean_host ** 2 + mean_watermarked ** 2 + c_1) * (std_host ** 2 + std_watermarked ** 2 + c_2)
         )
 
-    def normalized_correlation_coef(self, extracted, watermark):
+    @staticmethod
+    def normalized_correlation_coef(extracted, watermark):
         """Calculate NC of extracted watermark against the original one."""
         return sum(dot(extracted, watermark) / (norm(extracted) * norm(watermark)))
 
