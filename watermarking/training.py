@@ -66,13 +66,19 @@ class Training:
                 result,
                 self.ground_truth_images[i]
             )
-            # print("BACKWARD")
+            print("BACKWARD")
             # self.params = backward.Backward(
-            #     softmax_outputs,
+            #     result,
             #     cache,
             #     self.params,
             #     self.ground_truth_images[i]
             # ).run()
+            backward.Backward(
+                result,
+                cache,
+                self.params,
+                self.ground_truth_images[i]
+            ).run()
         # cnn.CNN.store_param(self.params[0], "batch norm") # scale shift
         # cnn.CNN.store_param(self.params[1], "kernel") # encoder
         # cnn.CNN.store_param(self.params[2], "kernel") # decoder

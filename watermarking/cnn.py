@@ -10,8 +10,6 @@ from numpy import (
     multiply,
     log,
     float32,
-    delete,
-    newaxis,
     zeros,
     ones,
     flip,
@@ -344,13 +342,13 @@ class CNN:
         return [
             CNN.softmax(background, foreground), #predict bg
             CNN.softmax(foreground, background) #predict fg
-        ]
+        ], [background, foreground]
 
     # tensorflow tested: tf.nn.softmax(matrix)
     @staticmethod
     def softmax(compared, compared_with):
         """Compute softmax values for each sets of scores in matrix."""
-        return exp(compared) / sum_array(exp(compared) + exp(compared_with))
+        return exp(compared) / (exp(compared) + exp(compared_with))
 
     # tensorflow tested: tf.keras.losses.BinaryCrossentropy() <call>
     @staticmethod
@@ -374,39 +372,36 @@ class CNN:
     # reference @14prakash tested
     @staticmethod
     def derivative_cross_entropy_loss(
-            softmax_output, ground_truth_matrix
+            positive_pred,
+            negative_pred,
+            ground_truth_matrix
         ):
         """Return the derivative of cross entropy loss against
             softmax output"""
-        softmax_output = array(softmax_output, dtype=float32)
+        positive_pred = array(positive_pred, dtype=float32)
+        negative_pred = array(negative_pred, dtype=float32)
         ground_truth_matrix = array(ground_truth_matrix, dtype=float32)
 
         return - multiply(
             ground_truth_matrix,
-            (1 / softmax_output)
+            (1 / positive_pred)
         ) - multiply(
             (1 - ground_truth_matrix),
-            (1 / (1 - softmax_output))
+            (1 / negative_pred)
         )
 
     # reference @14prakash tested
     @staticmethod
     def derivative_softmax(softmax_input):
         """Return the derivative of softmax against its input"""
-        e_x = exp(softmax_input)
-        to_be_divided = []
+        background, foreground = softmax_input
+        e_x_foreground = exp(foreground)
+        e_x_background = exp(background)
 
-        for i, row in enumerate(softmax_input):
-            to_be_divided_row = []
-            for j, pixel in enumerate(row):
-                #deleting current element from e_x
-                total_with_no_current = delete(e_x, i * e_x.shape[1] + j)
-                to_be_divided_row.append(
-                    exp(pixel) * total_with_no_current.sum(axis=0)
-                )
-            to_be_divided.append(to_be_divided_row)
-
-        return to_be_divided /(e_x.sum(axis=0) ** 2)
+        return (
+            (e_x_foreground * e_x_background) /
+            sum_array(e_x_foreground + e_x_background) ** 2
+        )
 
     # reference @14prakash tested
     @staticmethod
@@ -439,6 +434,9 @@ class CNN:
         ):
         """Update weight of current kernel"""
         current_kernel_weight = array(current_kernel_weight, dtype=float32)
+        batch_member_weight_gradient = array(
+            batch_member_weight_gradient, dtype=float32
+        )
         return current_kernel_weight - learning_rate * batch_member_weight_gradient
 
     # reference @14prakash tested
@@ -459,7 +457,7 @@ class CNN:
         for row in indices:
             downsampled_row = []
             for index in row:
-                downsampled_row.append(error_result[index[1]][index[0]])
+                downsampled_row.append(error_result[int(index[1])][int(index[0])])
             downsampled.append(downsampled_row)
         return downsampled
 
@@ -486,6 +484,12 @@ class CNN:
     @staticmethod
     def derivative_scale_shift(prev_error_result, normalized, gamma):
         """Produces error_result, gamma and beta gradient"""
+        print(
+            'derivative scale shift shape: ',
+            array(prev_error_result).shape,
+            ' and ',
+            array(normalized).shape
+        )
         gamma_gradient = sum_array(prev_error_result * normalized, axis=0)
         return(
             sum_array(prev_error_result, axis=0), # beta gradient

@@ -27,6 +27,7 @@ class Forward:
     batch_norm_cache = []
     relu_cache = []
     max_pooling_cache = []
+    conv_softmax_cache = []
     softmax_cache = []
 
     def __init__(self, istraining, inputs, params):
@@ -94,6 +95,7 @@ class Forward:
             self.batch_norm_cache,
             self.relu_cache,
             self.max_pooling_cache,
+            self.conv_softmax_cache,
             self.softmax_cache
         )
 
@@ -139,7 +141,6 @@ class Forward:
         else:
             kernels = self.encoder_kernels
             str_part = cnn.CNN.ENCODER
-
         for layer in range(
                 cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][0]
             ): #each stack consists of 2-3 layers
@@ -151,7 +152,9 @@ class Forward:
                     part
                 ][
                     stack_number
-                ].append(matrices)
+                ][
+                    layer
+                ] = matrices
             feature_map = []
             for channel in range(
                     cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][1]
@@ -192,6 +195,7 @@ class Forward:
             )
             normalized.append(result)
             caches.append(cache)
+        print('cache: ', array(caches).shape)
         self.batch_norm_cache[batch_number].append(caches)
         return normalized
 
@@ -248,14 +252,14 @@ class Forward:
         if self.istraining:
             softmax_per_batch = []
             for matrix in matrices:
-                self.softmax_cache.append(matrix[0])
-                softmax_per_batch.append(
-                    cnn.CNN.trainable_softmax(
-                        self.softmax_kernels,
-                        matrix[0] # has to access 0 because there seems
-                        # to be an extra channel dimension
-                    )
+                self.conv_softmax_cache.append(matrix[0])
+                result, cache = cnn.CNN.trainable_softmax(
+                    self.softmax_kernels,
+                    matrix[0] # has to access 0 because there seems
+                    # to be an extra channel dimension
                 )
+                softmax_per_batch.append(result)
+                self.softmax_cache.append(cache)
             return softmax_per_batch
         else:
             return cnn.CNN.trainable_softmax(
