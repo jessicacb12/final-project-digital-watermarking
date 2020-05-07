@@ -58,8 +58,7 @@ class Forward:
                     image = self.batch_norm_per_stack(
                         image,
                         cnn.CNN.ENCODER,
-                        i,
-                        batch
+                        i
                     )
                 image = self.relu_per_stack(image, batch)
                 image = self.max_pooling_per_stack(image, batch)
@@ -82,12 +81,8 @@ class Forward:
                     image = self.batch_norm_per_stack(
                         image,
                         cnn.CNN.DECODER,
-                        i,
-                        batch
+                        i
                     )
-            image = self.upsample_per_stack(
-                image, batch, 0
-            )
             decoded.append(image)
 
         return self.softmax_per_batch(decoded), (
@@ -181,22 +176,17 @@ class Forward:
             matrices = feature_maps
         return matrices
 
-    def batch_norm_per_stack(self, matrices, part, stack_number, batch_number):
+    def batch_norm_per_stack(self, matrices, part, stack_number):
         """Process each batch member with Batch Normalization"""
         print('BN', flush=True)
-        normalized = []
-        caches = []
         print(array(matrices).shape)
-        for matrix in matrices:
-            result, cache = cnn.CNN.batch_norm(
-                matrix,
-                self.scale_shift[part + "-" + str(stack_number) + "-beta"],
-                self.scale_shift[part+ "-" + str(stack_number) + '-gamma']
-            )
-            normalized.append(result)
-            caches.append(cache)
-        print('cache: ', array(caches).shape)
-        self.batch_norm_cache[batch_number].append(caches)
+        normalized, cache = cnn.CNN.batch_norm(
+            matrices,
+            self.scale_shift[part + "-" + str(stack_number) + "-beta"],
+            self.scale_shift[part+ "-" + str(stack_number) + '-gamma']
+        )
+        self.batch_norm_cache.append(cache)
+        print('cache: ', array(cache[0]).shape, ' for stack ', len(self.batch_norm_cache) - 1)
         return normalized
 
     def relu_per_stack(self, matrices, batch_number):

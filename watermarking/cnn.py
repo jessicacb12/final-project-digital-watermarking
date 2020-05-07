@@ -13,7 +13,8 @@ from numpy import (
     zeros,
     ones,
     flip,
-    argmax
+    argmax,
+    expand_dims
 )
 # from numpy import max as max_from_array
 from numpy import sum as sum_array
@@ -252,13 +253,14 @@ class CNN:
         # 0.001
     #)
     @staticmethod
-    def batch_norm(matrix, beta, gamma, epsilon=0.001):
-        """Calculate batch normalization from single matrix"""
-        average = mean(matrix)
-        variance = var(matrix)
+    def batch_norm(matrices, beta, gamma, epsilon=0.001):
+        """Calculate batch normalization from matrices in a batch"""
+        matrices = array(matrices)
+        average = mean(matrices, axis=0)
+        variance = var(matrices, axis=0)
 
-        number_mean = matrix - average
-        normalized = number_mean/(sqrt(variance + epsilon))
+        number_mean = matrices - average
+        normalized = number_mean / (sqrt(variance + epsilon))
         scaled_shift_data = normalized * gamma + beta
 
         return scaled_shift_data, (
@@ -400,7 +402,7 @@ class CNN:
 
         return (
             (e_x_foreground * e_x_background) /
-            sum_array(e_x_foreground + e_x_background) ** 2
+            (e_x_foreground + e_x_background) ** 2
         )
 
     # reference @14prakash tested
@@ -484,17 +486,19 @@ class CNN:
     @staticmethod
     def derivative_scale_shift(prev_error_result, normalized, gamma):
         """Produces error_result, gamma and beta gradient"""
+        gamma_gradients = sum_array(prev_error_result * normalized, axis=0)
         print(
             'derivative scale shift shape: ',
             array(prev_error_result).shape,
             ' and ',
-            array(normalized).shape
+            array(normalized).shape,
+            ' resulting gamma grad ',
+            gamma_gradients.shape
         )
-        gamma_gradient = sum_array(prev_error_result * normalized, axis=0)
         return(
-            sum_array(prev_error_result, axis=0), # beta gradient
-            gamma_gradient,
-            gamma_gradient * gamma # error_result
+            prev_error_result, # beta gradient
+            gamma_gradients,
+            gamma_gradients * gamma # error_results
         )
 
     @staticmethod
@@ -522,7 +526,9 @@ class CNN:
 
         second_part = (- sum_array(first_part, axis=0) / len(error_result))
 
-        return first_part + second_part
+        # expand dims because in batch norm, error per batch will be combined
+        # but we have to keep batch dimension exists
+        return expand_dims(first_part + second_part, axis=0)
     # def run(self):
     #     """Run CNN either it's training or testing"""
     #     # if self.istraining:

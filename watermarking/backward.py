@@ -27,10 +27,10 @@ class Backward:
     CROSS_ENTROPY = 0
     SOFTMAX = 1
     STANDARD_AVERAGE = 2
-    BATCH_NORM = 3
-    UPSAMPLING = 4
-    MAX_POOLING = 5
-    RELU = 6
+    UPSAMPLING = 3
+    MAX_POOLING = 4
+    RELU = 5
+    STANDARD_AVERAGE_INPUTS = 6
 
     def __init__(
             self,
@@ -63,21 +63,25 @@ class Backward:
         print("Decoder")
         # print(array(self.convolution_cache[0][0][0]).shape)
         print("Deriv Cross Entropy")
-        loss = self.average_result_for_process(
+
+        # expected: 1 matrix per batch
+        loss = self.per_batch_member_do(
             (self.softmax_outputs, self.ground_truth_matrices),
             self.CROSS_ENTROPY,
             len(self.softmax_outputs)
         )
-        print('shape: ', array(loss).shape)
+        print('shape: ', loss.shape)
         print("Deriv Softmax")
-        loss *= self.average_result_for_process(
-            self.softmax_cache,
+        # expected: 1 matrix per batch
+        loss *= self.per_batch_member_do(
+            array(self.softmax_cache),
             self.SOFTMAX,
             len(self.softmax_cache)
         )
-        print('shape: ', array(loss).shape)
-        loss *= self.back_softmax_convolution(loss)
-        print('shape: ', array(loss).shape)
+        print('shape: ', loss.shape)
+        # expected: 2 weight grad/batch, 1 loss matrix/batch
+        loss = self.back_softmax_convolution(loss)
+        print('shape: ', loss.shape)
 
         for i in range(0, len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.DECODER])):
             print('current stack: ', i)
@@ -87,26 +91,24 @@ class Backward:
             )
             print('error shape: ', array(error_result).shape)
             print("Deriv BN")
-            cache = Backward.get_cache_per_stack(
-                self.batch_norm_cache,
-                Backward.adjust_stack_number(cnn.CNN.DECODER, i)
-            )
-            loss *= self.average_result_for_process(
-                (error_result, cache),
-                self.BATCH_NORM,
-                cache.shape[0]
+            loss = cnn.CNN.derivative_batch_norm(
+                error_result,
+                self.batch_norm_cache[
+                    Backward.adjust_stack_number(cnn.CNN.DECODER, i)
+                ]
             )
             print('shape: ', array(loss).shape)
             print("Deriv Conv")
-            loss *= self.convolution_update_weight_get_error(
+            loss = self.convolution_update_weight_get_error(
                 cnn.CNN.DECODER, i, loss
             )
             print('shape: ', array(loss).shape)
             cache = Backward.get_cache_per_stack(
                 self.max_pooling_cache, i, indicesonly=True
             )
+            print('cache: ', array(cache).shape)
             print("Deriv Ups")
-            loss = self.average_result_for_process(
+            loss = self.per_batch_member_do(
                 [
                     loss,
                     cache
@@ -118,12 +120,12 @@ class Backward:
 
         # # encoder
         print("Encoder")
-        for i in range(len(cnn.CNN.CONVOLUTION_ORDERS) - 1, -1, -1):
+        for i in range(len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER]) - 1, -1, -1):
             print("Deriv Max pool")
             cache = Backward.get_cache_per_stack(
                 self.max_pooling_cache, i
             )
-            loss = self.average_result_for_process(
+            loss = self.per_batch_member_do(
                 [
                     loss,
                     cache
@@ -131,32 +133,35 @@ class Backward:
                 self.MAX_POOLING,
                 len(cache)
             )
+            print('shape: ', array(loss).shape)
             print("Deriv ReLU")
             cache = Backward.get_cache_per_stack(
                 self.relu_cache, i
             )
-            loss *= self.average_result_for_process(
+            loss *= self.per_batch_member_do(
                 cache,
                 self.RELU,
                 len(cache)
             )
+            print('shape: ', array(loss).shape)
             print("Deriv BN update weight")
             error_result = self.batch_norm_scale_shift_get_error(
                 cnn.CNN.ENCODER, i, loss
             )
+            print('error shape: ', array(error_result).shape)
             print("Deriv BN")
-            cache = Backward.get_cache_per_stack(
-                self.batch_norm_cache, i
+            loss = cnn.CNN.derivative_batch_norm(
+                error_result,
+                self.batch_norm_cache[
+                    Backward.adjust_stack_number(cnn.CNN.ENCODER, i)
+                ]
             )
-            loss *= self.average_result_for_process(
-                (error_result, cache),
-                self.BATCH_NORM,
-                len(cache)
-            )
+            print('shape: ', array(loss).shape)
             print("Deriv Conv")
-            loss *= self.convolution_update_weight_get_error(
+            loss = self.convolution_update_weight_get_error(
                 cnn.CNN.ENCODER, i, loss
             )
+            print('shape: ', array(loss).shape)
 
         # print(self.encoder_kernels["enc0-0-0"])
         # return (
@@ -165,7 +170,7 @@ class Backward:
         #     self.decoder_kernels,
         # )
 
-    def average_result_for_process(
+    def per_batch_member_do(
             self,
             batch_data,
             process,
@@ -186,68 +191,72 @@ class Backward:
                 ))
             elif process == self.STANDARD_AVERAGE:
                 result.append(batch_data[i])
-            elif process == self.BATCH_NORM:
-                print(batch_data[1][i].shape)
-                result.append(
-                    cnn.CNN.derivative_batch_norm(
-                        batch_data[0], # error result
-                        batch_data[1][i] # cache
-                    )
-                )
-            elif process == self.UPSAMPLING:
-                result.append(
-                    cnn.CNN.derivative_upsampling(
-                        batch_data[0], # error_result
-                        batch_data[1][i] # indices
-                    )
-                )
-            elif process == self.MAX_POOLING:
-                result.append(
-                    cnn.CNN.derivative_max_pooling(
-                        batch_data[0], # error_result
-                        batch_data[1][i] # indices
-                    )
-                )
             elif process == self.RELU:
                 result.append(
-                    cnn.CNN.derivative_relu(
+                    self.per_channel_in_batch_member_do(
+                        process,
                         batch_data[i]
                     )
                 )
-        total = sum_arr(result, axis=0) / length
-        return total[0] if len(total.shape) > 2 else total
+            elif process == self.STANDARD_AVERAGE_INPUTS:
+                result.append(
+                    self.per_batch_member_do(
+                        batch_data[i],
+                        self.STANDARD_AVERAGE,
+                        len(batch_data[i])
+                    )
+                )
+            else: # for max pooling and upsampling
+                result.append(
+                    self.per_channel_in_batch_member_do(
+                        process,
+                        batch_data[1][i], # indices
+                        batch_data[0][i] # error_result
+                    )
+                )
+        if process == self.STANDARD_AVERAGE:
+            result = sum_arr(result, axis=0) / len(result)
+        return array(result, dtype=float32)
 
     def back_softmax_convolution(self, prev_error_result):
         """Update weight and get average error result for
            foreground-background convolutions"""
         mean_weight_grad = []
-        for conv_input in self.conv_softmax_cache: # per batch member
+        loss = []
+
+        for i, conv_input in enumerate(self.conv_softmax_cache): # per batch member
             mean_weight_grad.append(cnn.CNN.weight_gradient(
-                conv_input, prev_error_result
+                conv_input,
+                prev_error_result[i][0] # again, because there's extra channel dimension
             ))
-        mean_weight_grad = self.average_result_for_process(
+            loss.append([
+                cnn.CNN.derivative_convolution(
+                    self.softmax_kernels["softmax-fg"],
+                    prev_error_result[i][0]
+                ),
+                cnn.CNN.derivative_convolution(
+                    self.softmax_kernels["softmax-bg"],
+                    prev_error_result[i][0]
+                )
+            ])
+        mean_weight_grad = self.per_batch_member_do(
             mean_weight_grad,
             self.STANDARD_AVERAGE,
             len(mean_weight_grad)
         )
 
-        fg_kernel, self.softmax_kernels["softmax-fg"] = self.conv_update_single_kernel(
+        self.softmax_kernels["softmax-fg"] = self.conv_update_single_kernel(
             self.softmax_kernels["softmax-fg"], mean_weight_grad
         )
-        bg_kernel, self.softmax_kernels["softmax-bg"] = self.conv_update_single_kernel(
+        self.softmax_kernels["softmax-bg"] = self.conv_update_single_kernel(
             self.softmax_kernels["softmax-bg"], mean_weight_grad
         )
 
-        return self.average_result_for_process(
-            [
-                cnn.CNN.derivative_convolution(fg_kernel, prev_error_result),
-                cnn.CNN.derivative_convolution(bg_kernel, prev_error_result)
-            ], self.STANDARD_AVERAGE, 2
-        )
+        return array(loss, dtype=float32)
 
     def conv_update_single_kernel(self, kernel, weight_gradient):
         """Update convolution weights for single kernel"""
-        return kernel, cnn.CNN.minibatch_gradient_descent(
+        return cnn.CNN.minibatch_gradient_descent(
             kernel,
             weight_gradient
         )
@@ -261,12 +270,8 @@ class Backward:
         """Scale shift batch norm weights in particular stack
            then return batch norm error result"""
         adjusted_stack_number = Backward.adjust_stack_number(part, stack_number)
-        normalized = Backward.get_cache_per_stack(
-            self.batch_norm_cache,
-            adjusted_stack_number,
-            indicesonly=False,
-            normalizedonly=True
-        )
+        print('taking bn cache on ', adjusted_stack_number)
+        normalized = self.batch_norm_cache[adjusted_stack_number][0]
         print('normalized shape: ', normalized.shape)
         (
             beta_gradient,
@@ -274,11 +279,7 @@ class Backward:
             error_result
         ) = cnn.CNN.derivative_scale_shift(
             prev_error_result,
-            self.average_result_for_process(
-                normalized,
-                self.STANDARD_AVERAGE,
-                normalized.shape[0]
-            ),
+            normalized,
             self.scale_shift[part + "-" + str(stack_number) + "-gamma"]
         )
 
@@ -286,14 +287,22 @@ class Backward:
             part + "-" + str(stack_number) + "-gamma"
         ] = cnn.CNN.minibatch_gradient_descent(
             self.scale_shift[part + "-" + str(stack_number) + "-gamma"],
-            gamma_gradient
+            self.per_batch_member_do(
+                gamma_gradient,
+                self.STANDARD_AVERAGE,
+                len(gamma_gradient)
+            )
         )
 
         self.scale_shift[
             part + "-" + str(stack_number) + "-beta"
         ] = cnn.CNN.minibatch_gradient_descent(
             self.scale_shift[part + "-" + str(stack_number) + "-beta"],
-            beta_gradient
+            self.per_batch_member_do(
+                beta_gradient,
+                self.STANDARD_AVERAGE,
+                beta_gradient.shape[0]
+            )
         )
 
         return error_result
@@ -302,21 +311,17 @@ class Backward:
     def adjust_stack_number(part, stack_number):
         """Adjustment because of cache from behind. Only used if
            process exists both in encoder and decoder"""
-        return stack_number if part == cnn.CNN.ENCODER else (
-            len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER]) * 2 - stack_number - 1
+        return stack_number + 1 if part == cnn.CNN.ENCODER else (
+            len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER]) * 2 - stack_number
         )
 
     def convolution_update_weight_get_error(self, part, stack_number, error_result):
         """Update convolution weights and return error_result per stack"""
         for i in range(0, cnn.CNN.CONVOLUTION_ORDERS[part][stack_number][0]): # layer
-            weight_gradient = self.weight_gradient_per_layer(
-                part, stack_number, i, error_result
-            )
             error_result = self.convolution_update_weight_per_layer(
                 part,
                 stack_number,
                 i,
-                weight_gradient,
                 error_result
             )
         return error_result
@@ -326,29 +331,29 @@ class Backward:
             part,
             stack_number,
             layer,
-            weight_gradient,
             error_result
         ):
         """Update convolution weights and return error per layer"""
-        error_per_layer = []
-        original_kernel = None
+        weight_gradient = self.weight_gradient_per_layer(
+            part, stack_number, layer, error_result
+        )
+        print('weight grad: ', array(weight_gradient).shape)
+
+        error_per_layer = [[] for _ in range(0, len(error_result))]
         kernel = self.encoder_kernels if part == cnn.CNN.ENCODER else self.decoder_kernels
         for i in range(0, cnn.CNN.CONVOLUTION_ORDERS[part][stack_number][1]): # channel
             name = part + str(stack_number) + "-" + str(layer) + "-" + str(i)
-            original_kernel, kernel[name] = self.conv_update_single_kernel(
-                kernel[name], weight_gradient
-            )
-            error_per_layer.append(
-                cnn.CNN.derivative_convolution(
-                    original_kernel,
-                    error_result
+            for j, batch_member in enumerate(error_result): # batch in error result
+                error_per_layer[j].append(
+                    cnn.CNN.derivative_convolution(
+                        kernel[name],
+                        batch_member[i]
+                    )
                 )
+            kernel[name] = self.conv_update_single_kernel(
+                kernel[name], weight_gradient[i]
             )
-        return self.average_result_for_process(
-            error_per_layer,
-            self.STANDARD_AVERAGE,
-            len(error_per_layer)
-        )
+        return array(error_per_layer)
 
     def weight_gradient_per_layer(
             self,
@@ -360,9 +365,11 @@ class Backward:
         """Return averaged weight gradient per stack"""
         weight_gradients = []
         part = forward.Forward.ENCODER if part == cnn.CNN.ENCODER else forward.Forward.DECODER
-        for batch_member_input in self.convolution_cache:
-            if len(batch_member_input[part][stack_number]) > 0:
-                weight_gradients_per_channel = []
+        for j in range(0, len(error_result[0])): # per channel in error result
+            weight_gradients_per_batch = []
+            for i, batch_member_input in enumerate(self.convolution_cache):
+                weight_gradients_per_member = []
+                # if len(batch_member_input[part][stack_number]) > 0:
                 for single_input in batch_member_input[
                         part
                     ][
@@ -370,41 +377,67 @@ class Backward:
                     ][
                         layer_number
                     ]: # per channel of input
-                    weight_gradients_per_channel.append(
+                    weight_gradients_per_member.append(
                         cnn.CNN.weight_gradient(
                             single_input,
-                            error_result
+                            error_result[i][j]
                         )
                     )
-                weight_gradients.append(
-                    self.average_result_for_process(
-                        weight_gradients_per_channel,
-                        self.STANDARD_AVERAGE,
-                        len(weight_gradients_per_channel)
-                    )
+                weight_gradients_per_batch.append(
+                    sum_arr(weight_gradients_per_member, axis=0)
                 )
-        return self.average_result_for_process(
-            weight_gradients,
-            self.STANDARD_AVERAGE,
-            len(weight_gradients)
-        )
+            weight_gradients.append(
+                self.per_batch_member_do(
+                    weight_gradients_per_batch,
+                    self.STANDARD_AVERAGE,
+                    len(weight_gradients_per_batch)
+                )
+            )
+        return weight_gradients
 
     @staticmethod
     def get_cache_per_stack(
             batch_cache,
             stack_number,
-            indicesonly=False,
-            normalizedonly=False
+            indicesonly=False
         ):
         """Get cache for particular stack"""
-        cache_per_batch = []
+        taken_cache = []
         for batch_member in batch_cache:
+            cache_per_batch = []
             if len(batch_member) > 0:
                 inputs = batch_member[stack_number]
                 print('original structure: ', array(inputs).shape)
                 for single_input in inputs:
-                    if normalizedonly:
-                        cache_per_batch.append(single_input[0]) # 0 is norm
                     if indicesonly:
                         cache_per_batch.append(single_input[2])
-        return array(cache_per_batch, dtype=float32)
+                    else:
+                        cache_per_batch = inputs
+                        break
+            taken_cache.append(cache_per_batch)
+        return taken_cache
+
+    def per_channel_in_batch_member_do(self, process, cache, loss=None):
+        """Process per channel in batch member"""
+        summed_loss = sum_arr(loss, axis=0)
+        per_batch_member_result = []
+        for channel in cache:
+            if process == self.UPSAMPLING:
+                per_batch_member_result.append(
+                    cnn.CNN.derivative_upsampling(
+                        summed_loss,
+                        channel
+                    )
+                )
+            elif process == self.MAX_POOLING:
+                per_batch_member_result.append(
+                    cnn.CNN.derivative_max_pooling(
+                        summed_loss,
+                        channel
+                    )
+                )
+            elif process == self.RELU:
+                per_batch_member_result.append(
+                    cnn.CNN.derivative_relu(channel)
+                )
+        return per_batch_member_result
