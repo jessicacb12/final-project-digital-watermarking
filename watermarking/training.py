@@ -82,7 +82,6 @@ class Training:
                 self.params,
                 self.ground_truth_images[i]
             ).run()
-            cache = None
         # cnn.CNN.store_param(self.params[0], "batch norm") # scale shift
         # cnn.CNN.store_param(self.params[1], "kernel") # encoder
         # cnn.CNN.store_param(self.params[2], "kernel") # decoder

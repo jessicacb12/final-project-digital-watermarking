@@ -14,21 +14,12 @@ class Forward:
 
     istraining = False
     inputs = []
-    max_pooling_index = []
 
     # params just to be used, not to be trained
     encoder_kernels = {}
     decoder_kernels = {}
     scale_shift = {}
     softmax_kernels = {}
-
-    # training cache
-    convolution_cache = []
-    batch_norm_cache = []
-    relu_cache = []
-    max_pooling_cache = []
-    conv_softmax_cache = []
-    softmax_cache = []
 
     def __init__(self, istraining, inputs, params):
         self.istraining = istraining
@@ -44,7 +35,15 @@ class Forward:
     def run(self):
         """Function that will be run from other classes"""
         if self.istraining:
+            self.convolution_cache = []
+            self.batch_norm_cache = []
+            self.relu_cache = []
+            self.max_pooling_cache = []
+            self.conv_softmax_cache = []
+            self.softmax_cache = []
             self.init_cache()
+        else:
+            self.max_pooling_index = []
 
         encoded = []
         # encoder
