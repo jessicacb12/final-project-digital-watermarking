@@ -400,10 +400,10 @@ class CNN:
         e_x_foreground = exp(foreground)
         e_x_background = exp(background)
 
-        return (
+        return [(
             (e_x_foreground * e_x_background) /
             (e_x_foreground + e_x_background) ** 2
-        )
+        )] # putting inside array because there should be single channel
 
     # reference @14prakash tested
     @staticmethod
@@ -421,7 +421,8 @@ class CNN:
     @staticmethod
     def padded(arr_data, padding):
         """Give padding with custom size to matrix"""
-        expanded = zeros((len(arr_data) + (padding * 2), len(arr_data[0]) + (padding * 2)))
+        arr_data = array(arr_data, dtype=float32)
+        expanded = zeros((arr_data.shape[0] + (padding * 2), arr_data.shape[1] + (padding * 2)))
         for i, row in enumerate(arr_data):
             for j, pixel in enumerate(row):
                 expanded[i + padding][j + padding] = pixel
@@ -526,9 +527,7 @@ class CNN:
 
         second_part = (- sum_array(first_part, axis=0) / len(error_result))
 
-        # expand dims because in batch norm, error per batch will be combined
-        # but we have to keep batch dimension exists
-        return expand_dims(first_part + second_part, axis=0)
+        return first_part + second_part
     # def run(self):
     #     """Run CNN either it's training or testing"""
     #     # if self.istraining:

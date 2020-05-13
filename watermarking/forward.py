@@ -49,42 +49,52 @@ class Forward:
         encoded = []
         # encoder
         print('encoder', flush=True)
-        for batch, image in enumerate(self.inputs):
-            print('shape: ', array(image).shape)
-            for i in range(len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER])):
-                image = self.conv_per_stack(
-                    image, self.ENCODER, i, batch
-                )
-                if self.istraining:
-                    image = self.batch_norm_per_stack(
-                        image,
-                        cnn.CNN.ENCODER,
-                        i
+        print('shape: ', self.inputs.shape)
+        encoded = self.inputs
+        for i in range(len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER])):
+            conved_images = []
+            for batch, image in enumerate(encoded):
+                print('current stack: ', i)
+                conved_images.append(
+                    self.conv_per_stack(
+                        image, self.ENCODER, i, batch
                     )
+                )
+            if self.istraining:
+                conved_images = self.batch_norm_per_stack(
+                    conved_images,
+                    cnn.CNN.ENCODER,
+                    i
+                )
+            processed_conv = []
+            for batch, image in enumerate(conved_images):
                 image = self.relu_per_stack(image, batch)
                 image = self.max_pooling_per_stack(image, batch)
-            encoded.append(image)
-        decoded = []
+                processed_conv.append(image)
+            encoded = processed_conv
+        decoded = encoded
         #decoder
         print('decoder', flush=True)
-        for batch, image in enumerate(encoded):
-            for i in range(
-                    len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.DECODER]) - 1,
-                    -1, -1
-                ):
+        for i in range(
+                len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.DECODER]) - 1,
+                -1, -1
+            ):
+            processed = []
+            for batch, image in enumerate(decoded):
                 image = self.upsample_per_stack(
                     image, batch, i
                 )
                 image = self.conv_per_stack(
                     image, self.DECODER, i, batch
                 )
-                if self.istraining:
-                    image = self.batch_norm_per_stack(
-                        image,
-                        cnn.CNN.DECODER,
-                        i
-                    )
-            decoded.append(image)
+                processed.append(image)
+
+            if self.istraining:
+                decoded = self.batch_norm_per_stack(
+                    processed,
+                    cnn.CNN.DECODER,
+                    i
+                )
 
         return self.softmax_per_batch(decoded), (
             self.convolution_cache,
@@ -122,7 +132,6 @@ class Forward:
     def init_two_dimension_cache(self):
         """Initialize ReLU, batch norm, and max pooling cache"""
         for _ in range(training.Training.BATCH_SIZE):
-            self.batch_norm_cache.append([])
             self.relu_cache.append([])
             self.max_pooling_cache.append([])
 
@@ -214,6 +223,7 @@ class Forward:
             self.max_pooling_cache[batch_number].append(cache)
         else:
             self.max_pooling_index.append(cache)
+        print('cache from stack: ', len(self.max_pooling_cache[batch_number]))
         return max_pooled
 
     def upsample_per_stack(self, matrices, batch_number, stack_number):
@@ -229,7 +239,8 @@ class Forward:
         upsampled = []
         i = 0
         try:
-            for i, matrix in enumerate(matrices):
+            print(array(matrices).shape, ' vs ', array(matrices_indices).shape)
+            for i, matrix in enumerate(matrices): # channel
                 upsampled.append(cnn.CNN.upsampling(
                     matrix,
                     matrices_indices[i]
@@ -243,8 +254,8 @@ class Forward:
         """Process each batch or single matrix into softmax output(s)"""
         if self.istraining:
             softmax_per_batch = []
-            for matrix in matrices:
-                self.conv_softmax_cache.append(matrix[0])
+            for matrix in matrices: # per batch member
+                self.conv_softmax_cache.append(matrix)
                 result, cache = cnn.CNN.trainable_softmax(
                     self.softmax_kernels,
                     matrix[0] # has to access 0 because there seems
@@ -252,6 +263,7 @@ class Forward:
                 )
                 softmax_per_batch.append(result)
                 self.softmax_cache.append(cache)
+            print('shape: ', array(self.softmax_cache).shape)
             return softmax_per_batch
         else:
             return cnn.CNN.trainable_softmax(

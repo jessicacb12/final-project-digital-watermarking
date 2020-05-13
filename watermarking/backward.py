@@ -114,7 +114,7 @@ class Backward:
                     cache
                 ],
                 self.UPSAMPLING,
-                len(cache)
+                len(loss)
             )
             print('shape: ', array(loss).shape)
 
@@ -125,23 +125,25 @@ class Backward:
             cache = Backward.get_cache_per_stack(
                 self.max_pooling_cache, i
             )
+            print('cache: ', array(cache).shape)
             loss = self.per_batch_member_do(
                 [
                     loss,
                     cache
                 ],
                 self.MAX_POOLING,
-                len(cache)
+                len(loss)
             )
             print('shape: ', array(loss).shape)
             print("Deriv ReLU")
             cache = Backward.get_cache_per_stack(
                 self.relu_cache, i
             )
+            print('cache: ', array(cache).shape)
             loss *= self.per_batch_member_do(
                 cache,
                 self.RELU,
-                len(cache)
+                len(loss)
             )
             print('shape: ', array(loss).shape)
             print("Deriv BN update weight")
@@ -223,22 +225,23 @@ class Backward:
            foreground-background convolutions"""
         mean_weight_grad = []
         loss = []
-
-        for i, conv_input in enumerate(self.conv_softmax_cache): # per batch member
-            mean_weight_grad.append(cnn.CNN.weight_gradient(
-                conv_input,
-                prev_error_result[i][0] # again, because there's extra channel dimension
-            ))
-            loss.append([
-                cnn.CNN.derivative_convolution(
-                    self.softmax_kernels["softmax-fg"],
-                    prev_error_result[i][0]
-                ),
-                cnn.CNN.derivative_convolution(
-                    self.softmax_kernels["softmax-bg"],
-                    prev_error_result[i][0]
-                )
-            ])
+        print('conv softmax cache: ', array(self.conv_softmax_cache).shape)
+        for i, batch_member in enumerate(self.conv_softmax_cache):
+            for conv_input in batch_member:
+                mean_weight_grad.append(cnn.CNN.weight_gradient(
+                    conv_input,
+                    prev_error_result[i][0] # again, because there's extra channel dimension
+                ))
+                loss.append([
+                    cnn.CNN.derivative_convolution(
+                        self.softmax_kernels["softmax-fg"],
+                        prev_error_result[i][0]
+                    ),
+                    cnn.CNN.derivative_convolution(
+                        self.softmax_kernels["softmax-bg"],
+                        prev_error_result[i][0]
+                    )
+                ])
         mean_weight_grad = self.per_batch_member_do(
             mean_weight_grad,
             self.STANDARD_AVERAGE,
@@ -309,8 +312,8 @@ class Backward:
     def adjust_stack_number(part, stack_number):
         """Adjustment because of cache from behind. Only used if
            process exists both in encoder and decoder"""
-        return stack_number + 1 if part == cnn.CNN.ENCODER else (
-            len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER]) * 2 - stack_number
+        return stack_number if part == cnn.CNN.ENCODER else (
+            len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER]) * 2 - stack_number - 1
         )
 
     def convolution_update_weight_get_error(self, part, stack_number, error_result):
@@ -401,6 +404,7 @@ class Backward:
         ):
         """Get cache for particular stack"""
         taken_cache = []
+        print('taking cache from stack ', stack_number)
         for batch_member in batch_cache:
             cache_per_batch = []
             if len(batch_member) > 0:
