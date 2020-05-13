@@ -33,6 +33,7 @@ class Forward:
     def __init__(self, istraining, inputs, params):
         self.istraining = istraining
         self.inputs = array(inputs)
+        print(self.inputs.shape)
         (
             self.scale_shift,
             self.encoder_kernels,
@@ -49,7 +50,7 @@ class Forward:
         # encoder
         print('encoder', flush=True)
         for batch, image in enumerate(self.inputs):
-            image = [image] # to create an illusion of "matrices" on conv_per_stack
+            print('shape: ', array(image).shape)
             for i in range(len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER])):
                 image = self.conv_per_stack(
                     image, self.ENCODER, i, batch
@@ -96,6 +97,7 @@ class Forward:
 
     def init_cache(self):
         """Initialize cache for each backprop later"""
+        print('initializing')
         self.init_convolution_cache()
         self.init_two_dimension_cache()
 

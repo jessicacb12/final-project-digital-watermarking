@@ -272,7 +272,6 @@ class Backward:
         adjusted_stack_number = Backward.adjust_stack_number(part, stack_number)
         print('taking bn cache on ', adjusted_stack_number)
         normalized = self.batch_norm_cache[adjusted_stack_number][0]
-        print('normalized shape: ', normalized.shape)
         (
             beta_gradient,
             gamma_gradient,
@@ -282,7 +281,6 @@ class Backward:
             normalized,
             self.scale_shift[part + "-" + str(stack_number) + "-gamma"]
         )
-
         self.scale_shift[
             part + "-" + str(stack_number) + "-gamma"
         ] = cnn.CNN.minibatch_gradient_descent(

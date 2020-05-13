@@ -1,12 +1,13 @@
 """This script is to training data with CNN"""
 
 from copy import deepcopy
+from numpy import array
 from watermarking import cnn, forward, backward
 
 class Training:
     """Divide training image before processing with forward,
        cross entropy loss, and backward"""
-    BATCH_SIZE = 1
+    BATCH_SIZE = 4
     training_batch = [] # input
     ground_truth_images = [] # to compare with
 
@@ -20,6 +21,7 @@ class Training:
         )
 
         # initializing params
+        print('batch: ', array(self.training_batch).shape)
         self.params = cnn.CNN.init_params()
 
     def divide_training_images(self, images, ground_truth):
@@ -27,7 +29,7 @@ class Training:
         if images and ground_truth is not None:
             i = 0
             while i < len(images):
-                [batch] = images[i : i + self.BATCH_SIZE]
+                batch = images[i : i + self.BATCH_SIZE]
                 self.training_batch.append(
                     batch
                 )
@@ -66,6 +68,7 @@ class Training:
                 result,
                 self.ground_truth_images[i]
             )
+            print('LOSS: ', loss)
             print("BACKWARD")
             # self.params = backward.Backward(
             #     result,
@@ -79,6 +82,7 @@ class Training:
                 self.params,
                 self.ground_truth_images[i]
             ).run()
+            cache = None
         # cnn.CNN.store_param(self.params[0], "batch norm") # scale shift
         # cnn.CNN.store_param(self.params[1], "kernel") # encoder
         # cnn.CNN.store_param(self.params[2], "kernel") # decoder

@@ -253,7 +253,7 @@ class CNN:
         # 0.001
     #)
     @staticmethod
-    def batch_norm(matrices, beta, gamma, epsilon=0.001):
+    def batch_norm(matrices, beta, gamma, epsilon=0.1):
         """Calculate batch normalization from matrices in a batch"""
         matrices = array(matrices)
         average = mean(matrices, axis=0)
