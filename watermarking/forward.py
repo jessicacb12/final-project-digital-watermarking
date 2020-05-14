@@ -59,12 +59,11 @@ class Forward:
                         image, self.ENCODER, i, batch
                     )
                 )
-            if self.istraining:
-                conved_images = self.batch_norm_per_stack(
-                    conved_images,
-                    cnn.CNN.ENCODER,
-                    i
-                )
+            conved_images = self.batch_norm_per_stack(
+                conved_images,
+                cnn.CNN.ENCODER,
+                i
+            )
             processed_conv = []
             for batch, image in enumerate(conved_images):
                 image = self.relu_per_stack(image, batch)
@@ -74,6 +73,7 @@ class Forward:
         decoded = encoded
         #decoder
         print('decoder', flush=True)
+        print('shape: ', array(decoded).shape)
         for i in range(
                 len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.DECODER]) - 1,
                 -1, -1
@@ -83,26 +83,29 @@ class Forward:
                 image = self.upsample_per_stack(
                     image, batch, i
                 )
+                print('conv')
                 image = self.conv_per_stack(
                     image, self.DECODER, i, batch
                 )
                 processed.append(image)
 
-            if self.istraining:
-                decoded = self.batch_norm_per_stack(
-                    processed,
-                    cnn.CNN.DECODER,
-                    i
-                )
+            decoded = self.batch_norm_per_stack(
+                processed,
+                cnn.CNN.DECODER,
+                i
+            )
 
-        return self.softmax_per_batch(decoded), (
-            self.convolution_cache,
-            self.batch_norm_cache,
-            self.relu_cache,
-            self.max_pooling_cache,
-            self.conv_softmax_cache,
-            self.softmax_cache
-        )
+        if self.istraining:
+            return self.softmax_per_batch(decoded), (
+                self.convolution_cache,
+                self.batch_norm_cache,
+                self.relu_cache,
+                self.max_pooling_cache,
+                self.conv_softmax_cache,
+                self.softmax_cache
+            )
+        else:
+            return self.softmax_per_batch(decoded)
 
     def init_cache(self):
         """Initialize cache for each backprop later"""
@@ -195,8 +198,9 @@ class Forward:
             self.scale_shift[part + "-" + str(stack_number) + "-beta"],
             self.scale_shift[part+ "-" + str(stack_number) + '-gamma']
         )
-        self.batch_norm_cache.append(cache)
-        print('cache: ', array(cache[0]).shape, ' for stack ', len(self.batch_norm_cache) - 1)
+        if self.istraining:
+            self.batch_norm_cache.append(cache)
+            print('cache: ', array(cache[0]).shape, ' for stack ', len(self.batch_norm_cache) - 1)
         return normalized
 
     def relu_per_stack(self, matrices, batch_number):
@@ -220,9 +224,9 @@ class Forward:
             cache.append([len(matrix), len(matrix[0]), max_index])
         if self.istraining:
             self.max_pooling_cache[batch_number].append(cache)
+            print('cache from stack: ', len(self.max_pooling_cache[batch_number]))
         else:
             self.max_pooling_index.append(cache)
-        print('cache from stack: ', len(self.max_pooling_cache[batch_number]))
         return max_pooled
 
     def upsample_per_stack(self, matrices, batch_number, stack_number):
@@ -234,7 +238,7 @@ class Forward:
         ] if self.istraining else self.max_pooling_index[
             stack_number
         ]
-        print('Ups', flush=True)
+        print('Ups taking stack: ', stack_number, flush=True)
         upsampled = []
         i = 0
         try:
@@ -246,7 +250,7 @@ class Forward:
                 ))
         except IndexError:
             print('error at ', i)
-            print(self.max_pooling_cache[0][3])
+        print('current size: ', array(upsampled).shape)
         return upsampled
 
     def softmax_per_batch(self, matrices):
@@ -265,7 +269,15 @@ class Forward:
             print('shape: ', array(self.softmax_cache).shape)
             return softmax_per_batch
         else:
-            return cnn.CNN.trainable_softmax(
+            (background, foreground), _ = cnn.CNN.trainable_softmax(
                 self.softmax_kernels,
-                matrices[0]
+                matrices[0][0] # has to 0 0 because there will be
+                # dimension for batch and channel
             )
+            result = cnn.CNN.softmax_classifier(
+                background, foreground
+            )
+
+            print('result: ', array(result).shape)
+            # return result, foreground, background
+            return result

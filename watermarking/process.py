@@ -87,7 +87,12 @@ class Process:
             return {
                 "error": result
             }
-        return result
+        return {
+            "image": self.create_preview(
+                np.array(result, dtype=np.uint8),
+                extraction.Extraction.FILENAME
+            )
+        }
 
     def get_preview_host(self, img):
         """Function to save host image and return its preview for html."""

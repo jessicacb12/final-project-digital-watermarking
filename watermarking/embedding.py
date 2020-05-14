@@ -3,7 +3,8 @@
 from copy import deepcopy
 from json import dumps
 from pywt import dwt2, idwt2
-from numpy import mean, median, std, dot, sum, uint8
+from numpy import sum as sum_arr
+from numpy import mean, median, std, dot, uint8
 from numpy.linalg import norm
 from PIL.Image import fromarray
 from PIL.TiffImagePlugin import ImageFileDirectory
@@ -197,7 +198,7 @@ class Embedding:
     @staticmethod
     def normalized_correlation_coef(extracted, watermark):
         """Calculate NC of extracted watermark against the original one."""
-        return sum(dot(extracted, watermark) / (norm(extracted) * norm(watermark)))
+        return sum_arr(dot(extracted, watermark) / (norm(extracted) * norm(watermark)))
 
     def embed_on_particular_channel(self, channel, host, watermark):
         """Function that will be called to embed watermark on particular channel.

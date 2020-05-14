@@ -528,8 +528,18 @@ class CNN:
         second_part = (- sum_array(first_part, axis=0) / len(error_result))
 
         return first_part + second_part
-    # def run(self):
-    #     """Run CNN either it's training or testing"""
-    #     # if self.istraining:
-    #     #     self.training()
+
+    @staticmethod
+    def softmax_classifier(background, foreground):
+        """Classify into binary values"""
+        # 0 0 because naturally there will be extra dimension for batch and channel
+        classified = []
+        for i, row in enumerate(background):
+            new_row = []
+            for j, _px in enumerate(row):
+                new_row.append(
+                    255 if _px > foreground[i][j] else 0
+                )
+            classified.append(new_row)
+        return classified
              

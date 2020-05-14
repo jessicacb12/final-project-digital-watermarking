@@ -3,11 +3,15 @@
 from re import findall, search
 from math import sqrt
 from pywt import dwt2
-from PIL.Image import open
-from watermarking import embedding
+from PIL.Image import open as open_pil
+from PIL.Image import fromarray
+from numpy import uint8, array
+from watermarking import embedding, cnn, forward, process
 
 class Extraction:
     """Contains CNN and the rest of watermark extraction methods."""
+
+    FILENAME = "data/watermarked_extracted"
 
     def get_positions_from_key(self, key):
         """Get positions from text key."""
@@ -33,7 +37,7 @@ class Extraction:
     @staticmethod
     def extract_key_from_image_file(location):
         """Extract key from KEY_LOCATION tag from image file"""
-        img = open(location)
+        img = open_pil(location)
         return img.tag_v2[embedding.Embedding.KEY_LOCATION]
 
     @staticmethod
@@ -68,6 +72,13 @@ class Extraction:
                 i += 1
         return embedding_map
 
+    def save_tiff(self, image):
+        """Save only image to tiff file."""
+        pil_img = fromarray(uint8(image))
+        pil_img.save(
+            process.Process.ROOT + self.FILENAME + ".tif"
+        )
+
     def extract_watermark(self, watermarked, key):
         """Extract watermark from watermarked image."""
         positions = self.get_positions_from_key(key)
@@ -87,4 +98,11 @@ class Extraction:
             ),
             self.get_positions_from_key(key)
         )
-        return embedding_map
+        extracted = forward.Forward(
+            False,
+            [[embedding_map]], # double array as batch and channel
+            cnn.CNN.init_params()
+        ).run()
+        print('shape: ', array(extracted).shape)
+        self.save_tiff(extracted)
+        return extracted
