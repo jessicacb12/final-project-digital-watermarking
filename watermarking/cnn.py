@@ -12,9 +12,7 @@ from numpy import (
     float32,
     zeros,
     ones,
-    flip,
-    argmax,
-    expand_dims
+    flip
 )
 # from numpy import max as max_from_array
 from numpy import sum as sum_array
@@ -230,15 +228,13 @@ class CNN:
         """Read batch norm params from file or initialize it directly"""
         param = None
         try:
-            file = open(
-                "static/params/" +
-                param_structure + "-" + param_name +
-                ".txt"
-            )
-            param = array(file.readline().strip().split(" "), dtype=float32)
-            file.close()
+            param = CNN.read_kernel(param_structure + "-" + param_name)
         except FileNotFoundError:
-            param = zeros(row_length) if param_name == 'beta' else ones(row_length)
+            param = zeros(
+                (row_length, row_length)
+            ) if param_name == 'beta' else ones(
+                (row_length, row_length)
+            )
         return param
 
     # Forward area
@@ -262,7 +258,7 @@ class CNN:
         number_mean = matrices - average
         normalized = number_mean / (sqrt(variance + epsilon))
         scaled_shift_data = normalized * gamma + beta
-
+        print('norm: ', array(gamma).shape, ' ssd ', array(beta).shape)
         return scaled_shift_data, (
             normalized, number_mean, sqrt(variance + epsilon)
         )
@@ -433,7 +429,7 @@ class CNN:
     def minibatch_gradient_descent(
             current_kernel_weight,
             batch_member_weight_gradient,
-            learning_rate=0.01
+            learning_rate=0.05
         ):
         """Update weight of current kernel"""
         current_kernel_weight = array(current_kernel_weight, dtype=float32)

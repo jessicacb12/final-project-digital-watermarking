@@ -167,7 +167,7 @@ class Embedding:
                 pixel[color] = single_color_image[i][j]
         return ori_image
 
-    def save_tiff(self, image, str_key):
+    def save_tiff(self, image, str_key, filename):
         """Save both image and key to tiff file."""
         pil_img = fromarray(uint8(image))
         info = ImageFileDirectory()
@@ -175,7 +175,7 @@ class Embedding:
             key=str_key
         ))
         pil_img.save(
-            process.Process.ROOT + self.FILENAME + ".tif",
+            filename + ".tif",
             tiffinfo=info
         )
 
@@ -222,7 +222,12 @@ class Embedding:
             key
         )
 
-    def embed_watermark(self, host, watermark):
+    def embed_watermark(
+            self,
+            host,
+            watermark,
+            filename
+        ):
         """Function that will return image with best SSIM based on channel."""
         map_result = dict(
             red=self.embed_on_particular_channel(self.RED, host, watermark),
@@ -240,13 +245,16 @@ class Embedding:
 
         # save image that will be used later
         # because openCV flips the order of RGB to BGR
-        self.save_tiff(cvtColor(
-            map_result[max_data[0]][0],
-            COLOR_BGR2RGB),
-                       map_result[max_data[0]][2]
-                      )
+        self.save_tiff(
+            cvtColor(
+                map_result[max_data[0]][0],
+                COLOR_BGR2RGB
+            ),
+            map_result[max_data[0]][2],
+            filename
+        )
 
-        result["image"] = imread(process.Process.ROOT + self.FILENAME + ".tif")
+        result["image"] = imread(filename + ".tif")
         result["max"] = max_data[1]
 
         return result

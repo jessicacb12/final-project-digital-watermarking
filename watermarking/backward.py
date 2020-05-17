@@ -286,27 +286,28 @@ class Backward:
         )
         self.scale_shift[
             part + "-" + str(stack_number) + "-gamma"
-        ] = cnn.CNN.minibatch_gradient_descent(
+        ] = self.batch_norm_update_weight(
             self.scale_shift[part + "-" + str(stack_number) + "-gamma"],
-            self.per_batch_member_do(
-                gamma_gradient,
-                self.STANDARD_AVERAGE,
-                len(gamma_gradient)
-            )
+            gamma_gradient
         )
+
+        beta_gradient = array(beta_gradient, dtype=float32)
 
         self.scale_shift[
             part + "-" + str(stack_number) + "-beta"
-        ] = cnn.CNN.minibatch_gradient_descent(
+        ] = self.batch_norm_update_weight(
             self.scale_shift[part + "-" + str(stack_number) + "-beta"],
-            self.per_batch_member_do(
-                beta_gradient,
-                self.STANDARD_AVERAGE,
-                beta_gradient.shape[0]
-            )
+            beta_gradient.sum(axis=0) / beta_gradient.shape[0] # averaging batch
         )
-
         return error_result
+
+    def batch_norm_update_weight(self, kernel, gradients):
+        """Update batch norm weight"""
+        for grad in gradients:
+            kernel = cnn.CNN.minibatch_gradient_descent(
+                kernel, grad
+            )
+        return kernel
 
     @staticmethod
     def adjust_stack_number(part, stack_number):

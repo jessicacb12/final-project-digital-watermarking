@@ -25,7 +25,8 @@ class Process:
         """Function to decode js image to open cv format."""
         return cv2.imdecode(np.frombuffer(byte_img, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
 
-    def pil_to_open_cv(self, img):
+    @staticmethod
+    def pil_to_open_cv(img):
         """Function to convert PIL to numpy array image."""
         pil_image = img.convert('RGB')
         open_cv_image = np.array(pil_image)
@@ -57,7 +58,8 @@ class Process:
 
         embedded = embedding.Embedding().embed_watermark(
             self.host,
-            self.watermark
+            self.watermark,
+            self.ROOT + embedding.Embedding.FILENAME
         )
         embedded["image"] = self.create_preview(
             embedded["image"],
@@ -79,8 +81,10 @@ class Process:
             }
 
         result = extraction.Extraction().extract_watermark(
-            self.watermarked,
-            self.extracted_key
+            extraction.Extraction().get_embedding_map(
+                self.watermarked,
+                self.extracted_key
+            )
         )
 
         if isinstance(result, str):
@@ -125,8 +129,9 @@ class Process:
     def create_preview(self, img, filename):
         """Function to create JPEG preview for html."""
         transformation = attacks.Attacks()
-        transformation.compress_jpeg(
-            self.open_cv_to_pil(img),
-            90
+        transformation.do_transformation(
+            transformation.JPEG,
+            90,
+            self.open_cv_to_pil(img)
         ).save(self.ROOT + filename + ".jpg")
         return filename

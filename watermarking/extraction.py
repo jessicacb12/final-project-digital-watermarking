@@ -34,11 +34,9 @@ class Extraction:
             search('{"key": "[0-3]', key).group()
         ).group()
 
-    @staticmethod
-    def extract_key_from_image_file(location):
-        """Extract key from KEY_LOCATION tag from image file"""
-        img = open_pil(location)
-        return img.tag_v2[embedding.Embedding.KEY_LOCATION]
+    def extract_key_from_pil_image(self, image):
+        """Extract key from KEY_LOCATION in PIL"""
+        return image.ifd[embedding.Embedding.KEY_LOCATION][0]
 
     @staticmethod
     def extract_key_from_image_description(img):
@@ -57,10 +55,14 @@ class Extraction:
 
         # make into 2 dimensions with assumption that watermark is square matrix
         for position in key:
-            value = embedding.Embedding.get_wave_diff(
-                horizontal[position[1]][position[0]],
-                vertical[position[1]][position[0]]
-            )
+            value = 0
+            try:
+                value = embedding.Embedding.get_wave_diff(
+                    horizontal[position[1]][position[0]],
+                    vertical[position[1]][position[0]]
+                )
+            except IndexError:
+                print('Index error. Probably because the watermark is moved/removed')
             row.append(
                 value
             )
@@ -79,8 +81,8 @@ class Extraction:
             process.Process.ROOT + self.FILENAME + ".tif"
         )
 
-    def extract_watermark(self, watermarked, key):
-        """Extract watermark from watermarked image."""
+    def get_embedding_map(self, watermarked, key):
+        """Extract embedding map from watermarked image."""
         positions = self.get_positions_from_key(key)
         channel = None
         try:
@@ -91,13 +93,16 @@ class Extraction:
         if positions is None:
             return "Locations are not detected in key"
 
-        embedding_map = self.extract_embedding_map(
+        return self.extract_embedding_map(
             embedding.Embedding.get_single_color_image(
                 int(channel),
                 watermarked
             ),
             self.get_positions_from_key(key)
         )
+
+    def extract_watermark(self, embedding_map):
+        """Extract watermark from embedding map."""
         extracted = forward.Forward(
             False,
             [[embedding_map]], # double array as batch and channel

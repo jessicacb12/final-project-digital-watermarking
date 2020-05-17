@@ -32,8 +32,6 @@ class Forward:
             self.softmax_kernels
         ) = params
 
-    def run(self):
-        """Function that will be run from other classes"""
         if self.istraining:
             self.convolution_cache = []
             self.batch_norm_cache = []
@@ -45,6 +43,8 @@ class Forward:
         else:
             self.max_pooling_index = []
 
+    def run(self):
+        """Function that will be run from other classes"""
         encoded = []
         # encoder
         print('encoder', flush=True)
@@ -94,6 +94,7 @@ class Forward:
                 cnn.CNN.DECODER,
                 i
             )
+            print('decoded: ', array(decoded).shape)
 
         if self.istraining:
             return self.softmax_per_batch(decoded), (
@@ -264,6 +265,7 @@ class Forward:
                     matrix[0] # has to access 0 because there seems
                     # to be an extra channel dimension
                 )
+                print('conv softmax cache was: ', array(self.conv_softmax_cache).shape)
                 softmax_per_batch.append(result)
                 self.softmax_cache.append(cache)
             print('shape: ', array(self.softmax_cache).shape)

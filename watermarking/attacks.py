@@ -16,20 +16,51 @@ from PIL import Image
 class Attacks:
     """Contains attacks for watermarked image."""
 
-    def __init__(self, image):
+    MEDIAN_BLUR = 0
+    AVERAGE_FILTER = 1
+    GAUSSIAN_BLUR = 2
+    RESIZE = 3
+    CROP = 4
+    ROTATE = 5
+    GAUSSIAN_NOISE = 6
+    SALT_PEPPER = 7
+    JPEG = 8
+
+    def __init__(self, image=None):
         self.image = image
+
+    def do_transformation(self, code, attr, image=None):
+        """What is used to do any kind of transformation onto image"""
+        if code == self.MEDIAN_BLUR:
+            return self.median_blur(attr)
+        elif code == self.AVERAGE_FILTER:
+            return self.average_filter(attr)
+        elif code == self.GAUSSIAN_BLUR:
+            return self.gaussian_blur(attr)
+        elif code == self.RESIZE:
+            return self.resize(attr)
+        elif code == self.CROP:
+            return self.crop(attr)
+        elif code == self.ROTATE:
+            return self.rotation(attr)
+        elif code == self.GAUSSIAN_NOISE:
+            return self.gaussian_noise(attr)
+        elif code == self.SALT_PEPPER:
+            return self.salt_and_pepper(attr)
+        else:
+            return self.compress_jpeg(image, attr)
 
     def median_blur(self, filter_size):
         """Perform median blur on image with particular filter size"""
         return medianBlur(self.image, filter_size)
 
-    def average_filter(self, filter_shape):
+    def average_filter(self, filter_size):
         """Perform average filter on image with particular filter size"""
-        return blur(self.image, filter_shape)
+        return blur(self.image, (filter_size, filter_size))
 
-    def gaussian_blur(self, filter_shape):
+    def gaussian_blur(self, filter_size):
         """Perform gaussian blur on image with particular filter size"""
-        return GaussianBlur(self.image, filter_shape, 0)
+        return GaussianBlur(self.image, (filter_size, filter_size), 0)
 
     def resize(self, percentage):
         """Scale up/down image based on defined percentage"""
