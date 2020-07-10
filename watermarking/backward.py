@@ -85,11 +85,12 @@ class Backward:
 
         for i in range(0, len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.DECODER])):
             print('current stack: ', i)
-            print("Deriv BN update weight")
-            error_result = self.batch_norm_scale_shift_get_error(
-                cnn.CNN.DECODER, i, loss
-            )
-            print('error shape: ', array(error_result).shape)
+            # print("Deriv BN update weight")
+            # error_result = self.batch_norm_scale_shift_get_error(
+            #     cnn.CNN.DECODER, i, loss
+            # )
+            # print('error shape: ', array(error_result).shape)
+            error_result = loss
             print("Deriv BN")
             loss = cnn.CNN.derivative_batch_norm(
                 error_result,
@@ -146,11 +147,12 @@ class Backward:
                 len(loss)
             )
             print('shape: ', array(loss).shape)
-            print("Deriv BN update weight")
-            error_result = self.batch_norm_scale_shift_get_error(
-                cnn.CNN.ENCODER, i, loss
-            )
-            print('error shape: ', array(error_result).shape)
+            # print("Deriv BN update weight")
+            # error_result = self.batch_norm_scale_shift_get_error(
+            #     cnn.CNN.ENCODER, i, loss
+            # )
+            # print('error shape: ', array(error_result).shape)
+            error_result = loss
             print("Deriv BN")
             loss = cnn.CNN.derivative_batch_norm(
                 error_result,
@@ -339,7 +341,6 @@ class Backward:
         weight_gradient = self.weight_gradient_per_layer(
             part, stack_number, layer, error_result
         )
-        print('weight grad: ', array(weight_gradient).shape)
 
         error_per_layer = [[] for _ in range(0, len(error_result))]
         kernel = self.encoder_kernels if part == cnn.CNN.ENCODER else self.decoder_kernels
@@ -410,7 +411,6 @@ class Backward:
             cache_per_batch = []
             if len(batch_member) > 0:
                 inputs = batch_member[stack_number]
-                print('original structure: ', array(inputs).shape)
                 for single_input in inputs:
                     if indicesonly:
                         cache_per_batch.append(single_input[2])

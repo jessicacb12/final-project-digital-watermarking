@@ -44,10 +44,6 @@ class Process:
         self.watermarked = None
         self.extracted_key = None
 
-    def training(self):
-        """Function to training watermark extractor."""
-        print('tes')
-
     def embed(self):
         """Function to embed watermark."""
         if self.host is None or self.watermark is None:
@@ -81,10 +77,8 @@ class Process:
             }
 
         result = extraction.Extraction().extract_watermark(
-            extraction.Extraction().get_embedding_map(
-                self.watermarked,
-                self.extracted_key
-            )
+            self.watermarked,
+            self.extracted_key
         )
 
         if isinstance(result, str):

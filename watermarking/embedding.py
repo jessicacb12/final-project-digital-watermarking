@@ -3,14 +3,11 @@
 from copy import deepcopy
 from json import dumps
 from pywt import dwt2, idwt2
-from numpy import sum as sum_arr
-from numpy import mean, median, std, dot, uint8
-from numpy.linalg import norm
+from numpy import mean, median, std, uint8
 from PIL.Image import fromarray
 from PIL.TiffImagePlugin import ImageFileDirectory
 from cv2 import cvtColor, COLOR_BGR2RGB, imread
 from watermarking import wavelet_diff
-from watermarking import process
 
 class Embedding:
     """Produces watermarked image with key attached"""
@@ -159,12 +156,12 @@ class Embedding:
 
         return horizontal, vertical, key
 
-    def put_back_color_in_image(self, color, single_color_image, ori_image):
+    def put_back_color_in_image(self, channel, single_color_image, ori_image):
         """Put back watermark embedded color channel to image"""
 
         for i, row in enumerate(ori_image):
             for j, pixel in enumerate(row):
-                pixel[color] = single_color_image[i][j]
+                pixel[channel] = single_color_image[i][j]
         return ori_image
 
     def save_tiff(self, image, str_key, filename):
@@ -194,11 +191,6 @@ class Embedding:
         ) / (
             (mean_host ** 2 + mean_watermarked ** 2 + c_1) * (std_host ** 2 + std_watermarked ** 2 + c_2)
         )
-
-    @staticmethod
-    def normalized_correlation_coef(extracted, watermark):
-        """Calculate NC of extracted watermark against the original one."""
-        return sum_arr(dot(extracted, watermark) / (norm(extracted) * norm(watermark)))
 
     def embed_on_particular_channel(self, channel, host, watermark):
         """Function that will be called to embed watermark on particular channel.

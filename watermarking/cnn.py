@@ -12,7 +12,8 @@ from numpy import (
     float32,
     zeros,
     ones,
-    flip
+    flip,
+    equal
 )
 # from numpy import max as max_from_array
 from numpy import sum as sum_array
@@ -29,32 +30,22 @@ class CNN:
     PADDING_SIZE = 3
     CONVOLUTION_ORDERS = {
         "enc": [
-            [2, 64],
-            [2, 128],
-            [3, 256],
-            [3, 512],
-            [3, 512]
+            [2, 8, [1, 8]],
+            #[2, 8],
+            # [3, 256],
+            # [3, 512],
+            # [3, 512]
         ],
         "dec": [
-            [2, 1],
-            [2, 64],
-            [3, 128],
-            [3, 256],
-            [3, 512]
+            [2, 1, [8, 1]],
+            #[2, 4],
+            # [3, 128],
+            # [3, 256],
+            # [3, 512]
         ]
     }
     ENCODER = "enc"
     DECODER = "dec"
-
-    def __init__(
-            self,
-            embedding_map=None,
-            training_images=None,
-            istraining=False
-        ):
-        self.istraining = istraining
-        self.training_images = training_images
-        self.embedding_map = embedding_map
 
     @staticmethod
     def init_params():
@@ -92,20 +83,26 @@ class CNN:
     @staticmethod
     def init_kernels(
             part=None,
-            stack_number=None,
-            layer_number=None,
-            ch_number=None,
+            structure=None,
             kernel_name=None
         ):
         """Initialize single layer kernels"""
         if kernel_name is None:
+            (
+                stack_number,
+                layer_number,
+                ch_number,
+                input_number
+            ) = structure
             kernel_name = (
                 part +
                 str(stack_number) +
                 "-" +
                 str(layer_number) +
                 "-" +
-                str(ch_number)
+                str(ch_number) +
+                '-' +
+                str(input_number)
             )
         kernel = []
         try:
@@ -120,15 +117,18 @@ class CNN:
     def init_layers(kernels, stack_number, part):
         """Initialize layers per stack"""
         for i in range(
-                0,
                 CNN.CONVOLUTION_ORDERS[part][stack_number][0]
             ): # layer
             for j in range(
-                    0,
                     CNN.CONVOLUTION_ORDERS[part][stack_number][1]
                 ): # channel
-                name, kernel = CNN.init_kernels(part, stack_number, i, j)
-                kernels[name] = kernel
+                for k in range(
+                        CNN.CONVOLUTION_ORDERS[part][stack_number][2][i]
+                    ):
+                    name, kernel = CNN.init_kernels(
+                        part, (stack_number, i, j, k)
+                    )
+                    kernels[name] = kernel
         return kernels
 
     @staticmethod
@@ -192,18 +192,11 @@ class CNN:
         return file
 
     @staticmethod
-    def store_param(param, part):
+    def store_param(param):
         """Store params into text file"""
         for key, value in param.items():
             file = open("static/params/" + key + ".txt", "w")
-            if part == 'kernel':
-                CNN.store_kernel(file, value)
-            else:
-                file.write(
-                    ''.join(
-                        (str(i) + " ") for i in value
-                    )
-                )
+            CNN.store_kernel(file, value)
             file.close()
 
     @staticmethod
@@ -257,7 +250,8 @@ class CNN:
 
         number_mean = matrices - average
         normalized = number_mean / (sqrt(variance + epsilon))
-        scaled_shift_data = normalized * gamma + beta
+        # scaled_shift_data = normalized * gamma + beta
+        scaled_shift_data = normalized
         print('norm: ', array(gamma).shape, ' ssd ', array(beta).shape)
         return scaled_shift_data, (
             normalized, number_mean, sqrt(variance + epsilon)
@@ -267,9 +261,8 @@ class CNN:
     @staticmethod
     def relu(matrix):
         """Process matrix with non activation ReLU function"""
-        for i, row in enumerate(matrix, start=0):
-            for j, value in enumerate(row, start=0):
-                matrix[i][j] = max(0, value)
+        matrix = array(matrix)
+        matrix[matrix <= 0] = 0
         return matrix
 
     # manual tested
@@ -337,16 +330,15 @@ class CNN:
             mode='same'
         )
 
-        return [
-            CNN.softmax(background, foreground), #predict bg
-            CNN.softmax(foreground, background) #predict fg
-        ], [background, foreground]
+        return CNN.softmax([background, foreground]), [background, foreground]
 
     # tensorflow tested: tf.nn.softmax(matrix)
     @staticmethod
-    def softmax(compared, compared_with):
+    def softmax(matrices):
         """Compute softmax values for each sets of scores in matrix."""
-        return exp(compared) / (exp(compared) + exp(compared_with))
+        matrices = array(matrices)
+        matrices = exp (matrices - matrices.max(axis=0))
+        return matrices / matrices.sum(axis=0)
 
     # tensorflow tested: tf.keras.losses.BinaryCrossentropy() <call>
     @staticmethod
@@ -363,6 +355,15 @@ class CNN:
             (1 - ground_truth_matrix),
             log(negative_pred)
         )
+
+        if mean(result) < 0:
+            print('NEGATIVE LOSS')
+            i = result.flatten().argmax()
+            print('MAX: ', result.flatten()[i], ' AT ', i)
+            print('caused by: ', positive_pred.flatten()[i], ' and ', negative_pred.flatten()[i])
+            i = result.flatten().argmin()
+            print('MIN: ', result.flatten()[i], ' AT ', i)
+            print('caused by: ', positive_pred.flatten()[i], ' and ', negative_pred.flatten()[i])
         return mean(result)
 
     # Backward area
@@ -429,7 +430,7 @@ class CNN:
     def minibatch_gradient_descent(
             current_kernel_weight,
             batch_member_weight_gradient,
-            learning_rate=0.05
+            learning_rate=0.01
         ):
         """Update weight of current kernel"""
         current_kernel_weight = array(current_kernel_weight, dtype=float32)
@@ -534,8 +535,8 @@ class CNN:
             new_row = []
             for j, _px in enumerate(row):
                 new_row.append(
-                    255 if _px > foreground[i][j] else 0
+                    0 if _px > foreground[i][j] else 1
                 )
             classified.append(new_row)
         return classified
-             
+        

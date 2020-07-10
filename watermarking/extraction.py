@@ -3,10 +3,9 @@
 from re import findall, search
 from math import sqrt
 from pywt import dwt2
-from PIL.Image import open as open_pil
 from PIL.Image import fromarray
-from numpy import uint8, array
-from watermarking import embedding, cnn, forward, process
+from numpy import uint8, array, mean, std, correlate, zeros, all
+from watermarking import embedding, cnn, forward, process, attacks  
 
 class Extraction:
     """Contains CNN and the rest of watermark extraction methods."""
@@ -62,7 +61,7 @@ class Extraction:
                     vertical[position[1]][position[0]]
                 )
             except IndexError:
-                print('Index error. Probably because the watermark is moved/removed')
+                pass
             row.append(
                 value
             )
@@ -101,11 +100,55 @@ class Extraction:
             self.get_positions_from_key(key)
         )
 
-    def extract_watermark(self, embedding_map):
+    @staticmethod
+    def normalized_correlation_coef(extracted, watermark):
+        """Calculate NC of extracted watermark against the original one."""
+        extracted = array(extracted)
+        watermark = array(watermark)
+
+        flat_extracted = extracted.ravel()
+        flat_wm = watermark.ravel()
+
+        divider = flat_extracted
+        divided_with = flat_wm
+
+        if all(divider == divided_with):
+            return 1
+
+        if not all(divider == 0):
+            divider = (
+                (flat_extracted - mean(flat_extracted)) /
+                (std(flat_extracted) * flat_extracted.shape[0])
+            )
+        if not all(divided_with == 0):
+            divided_with = (flat_wm - mean(flat_wm)) / (std(flat_wm))
+
+        return correlate(
+            divider, divided_with, 'full'
+        ).max()
+
+    def extract_watermark(self, watermarked, key):
         """Extract watermark from embedding map."""
         extracted = forward.Forward(
             False,
-            [[embedding_map]], # double array as batch and channel
+            [
+                [
+                    self.get_embedding_map(
+                        watermarked, key
+                    )
+                ],
+                [
+                    self.get_embedding_map(
+                        attacks.Attacks(
+                            watermarked
+                        ).do_transformation(
+                            attacks.Attacks.MEDIAN_BLUR,
+                            3
+                        ),
+                        key
+                    )
+                ]
+            ], # double array as batch and channel
             cnn.CNN.init_params()
         ).run()
         print('shape: ', array(extracted).shape)
