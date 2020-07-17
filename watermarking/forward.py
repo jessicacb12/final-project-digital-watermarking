@@ -1,8 +1,9 @@
 """This script is to process data with forward CNN"""
 
-from numpy import add, flip, array
+from numpy import add, flip, array, expand_dims, zeros
 from scipy.signal import convolve2d
 from watermarking import training, cnn
+import tensorflow as tf
 
 class Forward:
     """Process data per batch. If it's testing,
@@ -21,6 +22,7 @@ class Forward:
     scale_shift = {}
     softmax_kernels = {}
 
+    current_kernel = None
     def __init__(self, istraining, inputs, params):
         self.istraining = istraining
         self.inputs = array(inputs)
@@ -68,7 +70,7 @@ class Forward:
             processed_conv = []
             print('ReLU and max pool')
             for batch, image in enumerate(conved_images):
-                image = self.relu_per_stack(image, batch)
+                # image = self.relu_per_stack(image, batch)
                 image = self.max_pooling_per_stack(image, batch)
                 processed_conv.append(image)
             encoded = processed_conv
@@ -85,8 +87,9 @@ class Forward:
             print('ups and conv')
             for batch, image in enumerate(decoded):
                 image = self.upsample_per_stack(
-                    image, batch, i
+                    array(image), batch, i
                 )
+                print('ups: ', array(image).shape)
                 image = self.conv_per_stack(
                     image, self.DECODER, i, batch
                 )
@@ -152,6 +155,8 @@ class Forward:
     def conv_per_stack(self, matrices, part, stack_number, batch_number):
         """Convolution as many as number of layers and channels in current stack number.
            Returning a bunch of feature maps."""
+        matrices = array([self.fix_reverse_shape_3d(matrices)])
+        print('conv per stack: ', matrices.shape)
         kernels = {}
         str_part = ''
         if part == self.DECODER:
@@ -175,39 +180,89 @@ class Forward:
                     layer
                 ] = matrices
             feature_map = []
-            for channel in range(
-                    cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][1]
-                ): #each layer consists of 64-512 channels
-                for matrix in matrices:
-                    for i in range(
-                        cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][2][layer]
-                    ):
-                        convolved = convolve2d(
-                            matrix,
-                            flip(
-                                kernels[
-                                    str_part +
-                                    str(stack_number) +
-                                    "-" +
-                                    str(layer) +
-                                    "-" +
-                                    str(channel) +
-                                    "-" +
-                                    str(i)
-                                ]
-                            ),
-                            mode='same'
-                        )
-                        summed = convolved if(
-                            i == 0
-                        ) else add(summed, convolved)
-                    feature_map = summed if(
-                        channel == 0
-                    ) else add(feature_map, summed)
-                feature_maps.append(feature_map)
-            # matrices = self.relu_per_stack(feature_maps, batch_number)
-            matrices = feature_maps
-        return matrices
+            Forward.current_kernel = self.fix_reverse_shape_4d(
+                self.take_from_dict(
+                    kernels,
+                    (
+                        str_part,
+                        stack_number,
+                        layer
+                    )
+                )
+            )
+            matrices = tf.keras.layers.Conv2D(
+                cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][1],
+                cnn.CNN.CONVOLUTION_KERNEL_SIZE,
+                input_shape=matrices.shape[1:],
+                activation='relu',
+                padding = 'same',
+                kernel_initializer=Forward.get_current_kernel,
+                use_bias=False
+            )(matrices).numpy()
+            print(matrices.shape)
+        return self.reverse_shape(matrices[0])
+
+    def take_from_dict(self, kernels, address):
+        param = []
+        str_part, stack_number, layer = address
+        for channel in range(
+            cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][1]
+        ):
+            new_channel = []
+            for i in range(
+                cnn.CNN.CONVOLUTION_ORDERS[str_part][stack_number][2][layer]
+            ):
+                new_channel.append(kernels[
+                    str_part +
+                    str(stack_number) +
+                    "-" +
+                    str(layer) +
+                    "-" +
+                    str(channel) +
+                    "-" +
+                    str(i)
+                ])
+            param.append(new_channel)
+        return array(param)
+
+    @staticmethod
+    def get_current_kernel(shape, dtype=None):
+        return Forward.current_kernel
+
+    def reverse_shape(self, feature_map):
+        """64, 64, 8 -> 8, 64, 64"""
+        ch_number = feature_map.shape[2]
+        new_fm = []
+        for i in range(ch_number):
+            new_channel = []
+            for row in feature_map:
+                new_row = []
+                for _px in row:
+                    new_row.append(_px[i])
+                new_channel.append(new_row)
+            new_fm.append(new_channel)
+        return array(new_fm)
+
+    def fix_reverse_shape_3d(self, feature_map):
+        """877 -> 778"""
+        (i_number, w, h) = feature_map.shape
+        new_feature_map = zeros((w, h, i_number))
+        for i in range(i_number):
+            for j in range(w):
+                for k in range(h):
+                    new_feature_map[j, k, i] = feature_map[i, j, k]
+        return array(new_feature_map)
+
+    def fix_reverse_shape_4d(self, weight):
+        """8177 -> 7718"""
+        (i_number, c, w, h) = weight.shape
+        new_weight = zeros((w, h, c, i_number))
+        for i in range(c):
+            for j in range(i_number):
+                for k in range(w):
+                    for l in range(h):
+                        new_weight[k, l, i, j] = weight[j, i, k, l]
+        return array(new_weight)
 
     def batch_norm_per_stack(self, matrices, part, stack_number):
         """Process each batch member with Batch Normalization"""
@@ -245,24 +300,10 @@ class Forward:
 
     def upsample_per_stack(self, matrices, batch_number, stack_number):
         """Process each batch member with upsampling"""
-        matrices_indices = self.max_pooling_cache[
-            batch_number
-        ][
-            stack_number
-        ] if self.istraining else self.max_pooling_index[
-            stack_number
-        ]
-        upsampled = []
-        i = 0
-        try:
-            for i, matrix in enumerate(matrices): # channel
-                upsampled.append(cnn.CNN.upsampling(
-                    matrix,
-                    matrices_indices[i]
-                ))
-        except IndexError:
-            print('error at ', i)
-        return upsampled
+        upsampled = tf.keras.layers.UpSampling2D()(
+            array([self.fix_reverse_shape_3d(matrices)])
+        ).numpy()
+        return self.reverse_shape(upsampled[0])
 
     def softmax_per_batch(self, matrices):
         """Process each batch or single matrix into softmax output(s)"""
