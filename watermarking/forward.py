@@ -26,7 +26,7 @@ class Forward:
     def __init__(self, istraining, inputs, params):
         self.istraining = istraining
         self.inputs = array(inputs)
-        self.prnt('', self.inputs.shape)
+        print(self.inputs.shape)
         (
             self.scale_shift,
             self.encoder_kernels,
@@ -50,7 +50,7 @@ class Forward:
         encoded = []
         # encoder
         print('encoder', flush=True)
-        self.prnt('shape: ', self.inputs.shape)
+        print('shape: ', self.inputs.shape)
         encoded = self.inputs
         for i in range(len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.ENCODER])):
             print('STACK:', i)
@@ -61,12 +61,11 @@ class Forward:
                         image, self.ENCODER, i, batch
                     )
                 )
-            if len(encoded) > 1: # if batch > 1
-                conved_images = self.batch_norm_per_stack(
-                    conved_images,
-                    cnn.CNN.ENCODER,
-                    i
-                )
+            conved_images = self.batch_norm_per_stack(
+                conved_images,
+                cnn.CNN.ENCODER,
+                i
+            )
             processed_conv = []
             print('ReLU and max pool')
             for batch, image in enumerate(conved_images):
@@ -77,7 +76,7 @@ class Forward:
         decoded = encoded
         #decoder
         print('decoder', flush=True)
-        self.prnt('shape: ', array(decoded).shape)
+        print('shape: ', array(decoded).shape)
         for i in range(
                 len(cnn.CNN.CONVOLUTION_ORDERS[cnn.CNN.DECODER]) - 1,
                 -1, -1
@@ -94,16 +93,13 @@ class Forward:
                     image, self.DECODER, i, batch
                 )
                 processed.append(image)
-            if len(processed) > 1: # if batch > 1
-                decoded = self.batch_norm_per_stack(
-                    processed,
-                    cnn.CNN.DECODER,
-                    i
-                )
-            else:
-                decoded = processed		
-            # decoded = processed	
-            self.prnt('decoded: ', array(decoded).shape)
+            decoded = self.batch_norm_per_stack(
+                processed,
+                cnn.CNN.DECODER,
+                i
+            )
+            # decoded = array(processed)
+            print(decoded.shape)
         if self.istraining:
             return self.softmax_per_batch(decoded), (
                 self.convolution_cache,
@@ -145,11 +141,6 @@ class Forward:
         for _ in range(training.Training.BATCH_SIZE):
             self.relu_cache.append([])
             self.max_pooling_cache.append([])
-
-    def prnt(self, message, shape):
-        if not self.istraining:
-            shape = (1, shape[1], shape[2], shape[3])
-        print(message, shape)
 
     # manually tested in jupyter
     def conv_per_stack(self, matrices, part, stack_number, batch_number):
@@ -200,7 +191,7 @@ class Forward:
                 use_bias=False
             )(matrices).numpy()
             print(matrices.shape)
-        return self.reverse_shape(matrices[0])
+        return Forward.reverse_shape(matrices[0])
 
     def take_from_dict(self, kernels, address):
         param = []
@@ -229,7 +220,8 @@ class Forward:
     def get_current_kernel(shape, dtype=None):
         return Forward.current_kernel
 
-    def reverse_shape(self, feature_map):
+    @staticmethod    
+    def reverse_shape(feature_map):
         """64, 64, 8 -> 8, 64, 64"""
         ch_number = feature_map.shape[2]
         new_fm = []
@@ -266,11 +258,13 @@ class Forward:
 
     def batch_norm_per_stack(self, matrices, part, stack_number):
         """Process each batch member with Batch Normalization"""
-        self.prnt('BN', array(matrices).shape)
+        matrices = array(matrices)
         normalized, cache = cnn.CNN.batch_norm(
             matrices,
-            self.scale_shift[part + "-" + str(stack_number) + "-beta"],
-            self.scale_shift[part+ "-" + str(stack_number) + '-gamma']
+            self.scale_shift[part + str(stack_number) + "-beta"],
+            self.scale_shift[part + str(stack_number) + '-gamma'],
+            average=self.scale_shift[part + str(stack_number) + "-average"],
+            variance=self.scale_shift[part + str(stack_number) + "-variance"]
         )
         if self.istraining:
             self.batch_norm_cache.append(cache)
@@ -303,7 +297,7 @@ class Forward:
         upsampled = tf.keras.layers.UpSampling2D()(
             array([self.fix_reverse_shape_3d(matrices)])
         ).numpy()
-        return self.reverse_shape(upsampled[0])
+        return Forward.reverse_shape(upsampled[0])
 
     def softmax_per_batch(self, matrices):
         """Process each batch or single matrix into softmax output(s)"""
@@ -314,8 +308,7 @@ class Forward:
                 self.conv_softmax_cache.append(matrix)
                 result, cache = cnn.CNN.trainable_softmax(
                     self.softmax_kernels,
-                    matrix[0] # has to access 0 because there seems
-                    # to be an extra channel dimension
+                    matrix
                 )
                 softmax_per_batch.append(result)
                 self.softmax_cache.append(cache)
@@ -323,9 +316,11 @@ class Forward:
             return softmax_per_batch
         else:
             (foreground, background), _ = cnn.CNN.trainable_softmax(
-                self.softmax_kernels,
-                matrices[0][0] # has to 0 0 because there will be
-                # dimension for batch and channel
+                self.fix_reverse_shape_4d(
+                    self.softmax_kernels
+                ),
+                array([self.fix_reverse_shape_3d(matrices[0])]) 
+                # 0 because batch dimension will be there
             )
             result = cnn.CNN.softmax_classifier(
                 foreground, background

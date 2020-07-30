@@ -18,7 +18,8 @@ from numpy import (
 # from numpy import max as max_from_array
 from numpy import sum as sum_array
 from scipy.signal import convolve2d
-from watermarking import value_with_position
+from watermarking import value_with_position, forward
+import tensorflow as tf
 
 class CNN:
     """Keeps atrribute embedding map and weight"""
@@ -37,11 +38,14 @@ class CNN:
             # [3, 512]
         ],
         "dec": [
-            [2, 1, [8, 1]],
+            [2, 8, [8, 8]],
             #[2, 4],
             # [3, 128],
             # [3, 256],
             # [3, 512]
+        ],
+        "softmax": [
+            ['fg', 'bg'], 8
         ]
     }
     ENCODER = "enc"
@@ -149,37 +153,33 @@ class CNN:
     def init_batch_norm():
         """Initialize batch norms gamma beta."""
         batch_norm_params = {}
+        params_list = ['gamma', 'beta', 'average', 'variance']
         for part in [CNN.ENCODER, CNN.DECODER]:
             side = CNN.INPUT_SIZE
             for i in range(0, len(CNN.CONVOLUTION_ORDERS[part])):
-                print(part, ' ', i, ' -> ', side)
-                batch_norm_params[
-                    part + "-" + str(i) + "-gamma"
-                ] = CNN.init_single_batch_norm_param(
-                    part + "-" + str(i),
-                    "gamma",
-                    side
-                )
-                batch_norm_params[
-                    part + "-" + str(i) + "-beta"
-                ] = CNN.init_single_batch_norm_param(
-                    part + "-" + str(i),
-                    "beta",
-                    side
-                )
-                side //= 2
+                for param_name in params_list:
+                    batch_norm_params[
+                        part + str(i) + "-" + param_name
+                    ] = CNN.init_single_batch_norm_param(
+                        part + str(i),
+                        param_name,
+                        CNN.CONVOLUTION_ORDERS[part][i][1] # based on number of channel output
+                    )
 
         return batch_norm_params
 
     @staticmethod
     def init_softmax_kernels():
         """Initialize kernels for softmax."""
-        kernels = {}
-        name, foreground = CNN.init_kernels(kernel_name="softmax-fg")
-        kernels[name] = foreground
-        name, background = CNN.init_kernels(kernel_name="softmax-bg")
-        kernels[name] = background
-        return kernels
+        kernels = []
+        for i, part in enumerate(CNN.CONVOLUTION_ORDERS['softmax'][0]):
+            kernels.append([])
+            for _input in range(CNN.CONVOLUTION_ORDERS['softmax'][1]):
+                _, kernel = CNN.init_kernels(
+                    kernel_name='softmax-' + part + str(_input)
+                )
+                kernels[i].append(kernel)
+        return array(kernels)
 
     @staticmethod
     def store_kernel(file, rows):
@@ -223,11 +223,12 @@ class CNN:
         try:
             param = CNN.read_kernel(param_structure + "-" + param_name)
         except FileNotFoundError:
-            param = zeros(
-                (row_length, row_length)
-            ) if param_name == 'beta' else ones(
-                (row_length, row_length)
-            )
+            if param_name == 'beta':
+                param = zeros((row_length)) 
+            elif param_name == 'gamma':
+                param = ones((row_length))
+            else:
+                param = None
         return param
 
     # Forward area
@@ -241,18 +242,45 @@ class CNN:
         # tf.constant(np.ones(len(a)), dtype=tf.float32),
         # 0.001
     #)
+
     @staticmethod
-    def batch_norm(matrices, beta, gamma, epsilon=0.1):
+    def expand_batch_norm_param(param):
+        """
+        Since this keep on becoming problem, each param seems has to be 
+        expanded into shape (batch,channel,1,1)
+        """
+        param = array(param)
+        return param.reshape(
+            param.shape[0], param.shape[1], 1, 1
+        )
+
+    @staticmethod
+    def batch_norm(
+            matrices,
+            beta,
+            gamma,
+            average=None,
+            variance=None,
+            epsilon=0.001
+        ):
         """Calculate batch normalization from matrices in a batch"""
         matrices = array(matrices)
-        average = mean(matrices, axis=0)
-        variance = var(matrices, axis=0)
+        beta = CNN.expand_batch_norm_param(beta)
+        gamma = CNN.expand_batch_norm_param(gamma)
+        if average == None:
+            average = mean(matrices, axis=1)
+        else:
+            average = CNN.expand_batch_norm_param(average)
+        if variance == None:
+            variance = var(matrices, axis=1)
+        else:
+            variance = CNN.expand_batch_norm_param(variance)
 
         number_mean = matrices - average
         normalized = number_mean / (sqrt(variance + epsilon))
-        # scaled_shift_data = normalized * gamma + beta
-        scaled_shift_data = normalized
-        print('norm: ', array(gamma).shape, ' ssd ', array(beta).shape)
+        scaled_shift_data = normalized * gamma + beta
+        # scaled_shift_data = normalized
+        print('norm: ', gamma.shape, ' ssd ', beta.shape)
         return scaled_shift_data, (
             normalized, number_mean, sqrt(variance + epsilon)
         )
@@ -318,19 +346,37 @@ class CNN:
 
     @staticmethod
     def trainable_softmax(kernels, matrix):
-        """Return classified matrix"""
-        foreground = convolve2d(
-            matrix,
-            flip(kernels["softmax-fg"]),
-            mode='same'
-        )
-        background = convolve2d(
-            matrix,
-            flip(kernels["softmax-bg"]),
-            mode='same'
+        """
+        Return classified matrix.
+        - Kernels shape will be 77(input number)2
+        - Matrix shape will be batch, width, height, channel
+        """
+
+        CNN.softmax_kernel = kernels
+
+        matrix = forward.Forward.reverse_shape(
+            tf.keras.layers.Conv2D(
+                len(CNN.CONVOLUTION_ORDERS['softmax'][0]),
+                CNN.CONVOLUTION_KERNEL_SIZE,
+                input_shape=matrix.shape[1:],
+                padding = 'same',
+                kernel_initializer=CNN.get_softmax_kernel,
+                use_bias=False
+            )(matrix).numpy()[0]
         )
 
+        foreground = matrix[
+            CNN.CONVOLUTION_ORDERS['softmax'][0].index('fg')
+        ]
+        background = matrix[
+            CNN.CONVOLUTION_ORDERS['softmax'][0].index('bg')
+        ]
+
         return CNN.softmax([background, foreground]), [background, foreground]
+
+    @staticmethod
+    def get_softmax_kernel(shape, dtype=None):
+        return CNN.softmax_kernel
 
     # tensorflow tested: tf.nn.softmax(matrix)
     @staticmethod
