@@ -3,6 +3,7 @@
 import cv2
 import numpy as np
 from PIL import Image
+import calendar, time # to get timestamp
 from watermarking import attacks
 from watermarking import embedding
 from watermarking import extraction
@@ -51,15 +52,15 @@ class Process:
                 "error": """Please upload your watermark
                 and your image that will be embedded with watermark."""
             }
-
+        timestamp = self.get_timestamp()
         embedded = embedding.Embedding().embed_watermark(
             self.host,
             self.watermark,
-            self.ROOT + embedding.Embedding.FILENAME
+            self.ROOT + embedding.Embedding.FILENAME + timestamp
         )
         embedded["image"] = self.create_preview(
             embedded["image"],
-            embedding.Embedding.FILENAME
+            embedding.Embedding.FILENAME + timestamp
         )
         self.reset_input_data()
         return embedded
@@ -97,7 +98,7 @@ class Process:
         self.host = self.js_image_to_open_cv(img)
         return self.create_preview(
             self.js_image_to_open_cv(img),
-            self.PREVIEW_HOST
+            self.PREVIEW_HOST + self.get_timestamp()
         )
 
     def get_preview_watermark(self, img):
@@ -105,7 +106,7 @@ class Process:
         self.watermark = self.js_image_to_open_cv(img)
         return self.create_preview(
             self.js_image_to_open_cv(img),
-            self.PREVIEW_WM
+            self.PREVIEW_WM + self.get_timestamp()
         )
 
     def get_preview_watermarked(self, img):
@@ -117,7 +118,7 @@ class Process:
         self.watermarked = self.js_image_to_open_cv(img)
         return self.create_preview(
             self.js_image_to_open_cv(img),
-            self.PREVIEW_WMED
+            self.PREVIEW_WMED + self.get_timestamp()
         )
 
     def create_preview(self, img, filename):
@@ -129,3 +130,7 @@ class Process:
             self.open_cv_to_pil(img)
         ).save(self.ROOT + filename + ".jpg")
         return filename
+
+    def get_timestamp(self):
+        """Call this function to prevent image caching in web"""
+        return str(calendar.timegm(time.gmtime()))

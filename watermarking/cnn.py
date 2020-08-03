@@ -31,21 +31,21 @@ class CNN:
     PADDING_SIZE = 3
     CONVOLUTION_ORDERS = {
         "enc": [
-            [2, 8, [1, 8]],
-            #[2, 8],
+            [2, 4, [1, 4]],
+            [2, 8, [4, 8]],
             # [3, 256],
             # [3, 512],
             # [3, 512]
         ],
         "dec": [
+            [2, 4, [8, 4]],
             [2, 8, [8, 8]],
-            #[2, 4],
             # [3, 128],
             # [3, 256],
             # [3, 512]
         ],
         "softmax": [
-            ['fg', 'bg'], 8
+            ['fg', 'bg'], 4
         ]
     }
     ENCODER = "enc"
@@ -581,7 +581,7 @@ class CNN:
             new_row = []
             for j, _px in enumerate(row):
                 new_row.append(
-                    0 if _px > foreground[i][j] else 1
+                    0 if _px > foreground[i][j] else 255
                 )
             classified.append(new_row)
         return classified

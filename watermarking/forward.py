@@ -237,6 +237,7 @@ class Forward:
 
     def fix_reverse_shape_3d(self, feature_map):
         """877 -> 778"""
+        feature_map = array(feature_map)
         (i_number, w, h) = feature_map.shape
         new_feature_map = zeros((w, h, i_number))
         for i in range(i_number):
